@@ -1,0 +1,20 @@
+# Caddy automatically provisions and renews Let's Encrypt TLS for these domains.
+# Domains are read from .env (DASHBOARD_DOMAIN, API_DOMAIN, ACME_EMAIL).
+# DNS A records for these names must point at this host before first run.
+
+{
+    email {$ACME_EMAIL}
+}
+
+{$DASHBOARD_DOMAIN} {
+    encode gzip
+    reverse_proxy dashboard:3000
+}
+
+{$API_DOMAIN} {
+    encode gzip
+    request_body {
+        max_size 50MB
+    }
+    reverse_proxy api:4000
+}

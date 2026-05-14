@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+*.log
+**/dist
+**/.next
+**/.turbo
+**/.tsbuildinfo
+*.tsbuildinfo
+tmp
+.DS_Store
+.claude
+README.md
