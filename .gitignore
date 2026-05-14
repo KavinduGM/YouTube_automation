@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+.turbo/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+tmp/
+uploads/
+prisma/migrations/dev.db*
+
+# Generated
+packages/shared/src/db/generated/

@@ -1,0 +1,70 @@
+/* Minimal utility CSS — intentionally no Tailwind to avoid extra build deps. */
+:root {
+  color-scheme: light;
+  --bg: #fafafa;
+  --fg: #111;
+  --muted: #666;
+  --border: #e5e5e5;
+  --card: #fff;
+  --accent: #111;
+  --accent-fg: #fff;
+  --danger: #b91c1c;
+  --ok: #047857;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+a { color: inherit; }
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.nav {
+  display: flex; gap: 16px; padding: 12px 24px;
+  background: #fff; border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+.nav a { text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+.nav a.active { background: #111; color: #fff; }
+.nav .spacer { flex: 1; }
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin-bottom: 12px;
+}
+.btn {
+  display: inline-block; padding: 8px 14px; border-radius: 6px;
+  background: var(--accent); color: var(--accent-fg);
+  border: none; cursor: pointer; font-size: 14px;
+  text-decoration: none;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.secondary { background: #f1f1f1; color: #111; }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.ok { background: var(--ok); color: #fff; }
+.btn.small { padding: 5px 10px; font-size: 12px; }
+input[type=text], input[type=email], input[type=datetime-local], input[type=number],
+textarea, select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; font: inherit; background: #fff;
+}
+textarea { min-height: 100px; resize: vertical; font-family: inherit; }
+label { display: block; font-weight: 500; margin: 12px 0 4px; }
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; }
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;}
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { background: #f6f6f6; font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.gray { background: #eee; color: #444; }
+.badge.yellow { background: #fef3c7; color: #92400e; }
+.badge.green { background: #d1fae5; color: #065f46; }
+.badge.red { background: #fee2e2; color: #991b1b; }
+.badge.blue { background: #dbeafe; color: #1e40af; }
+.badge.teal { background: #ccfbf1; color: #115e59; }
+.muted { color: var(--muted); }
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 16px; }
+.kv dt { color: var(--muted); }
+pre { background: #f6f6f6; padding: 10px; border-radius: 6px; overflow: auto; }

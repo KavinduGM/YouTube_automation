@@ -1,0 +1,167 @@
+// YouTube Automation — data model
+// All times stored UTC; rendered in America/New_York in the UI.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────── Channels ─────────
+// One row per YouTube channel (OAP, OAG, Nursing).
+// Holds the OAuth refresh token used to upload to that channel.
+model Channel {
+  id                  String   @id @default(cuid())
+  slug                String   @unique // "OAP" | "OAG" | "NUR"
+  name                String
+  youtubeChannelId    String?  // populated after first OAuth
+  // Encrypted OAuth refresh token (AES-256-GCM, see shared/crypto.ts)
+  refreshTokenEnc     String?
+  // Scope granted (so we can detect when re-consent is needed)
+  scopes              String?
+
+  // Drive folder for this channel's monthly content (root)
+  driveFolderId       String?
+
+  // Sheet for the current month (id only; system updates rows)
+  defaultSheetId      String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  contentItems        ContentItem[]
+}
+
+// ───────── Google service connection (for Drive + Sheets) ─────────
+// Separate OAuth grant for reading Drive + writing Sheets (single user).
+model GoogleConnection {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  refreshTokenEnc     String
+  scopes              String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ───────── Content items (planned + tracked) ─────────
+enum ContentType {
+  long
+  short
+  post   // reserved for future; v1 does not auto-publish posts
+}
+
+enum ContentStatus {
+  planned            // metadata exists, no file yet
+  uploaded           // file detected in Drive, awaiting approval
+  pending_approval   // matched + emailed reviewer
+  approved           // human approved, queued for upload
+  scheduling         // being uploaded to YouTube right now
+  scheduled          // uploaded to YouTube with publishAt
+  published          // confirmed live
+  failed             // upload or scheduling failed
+  rejected           // human rejected
+  canceled           // manually canceled
+}
+
+model ContentItem {
+  id                String        @id @default(cuid())
+  channelId         String
+  channel           Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  type              ContentType
+  // Strict filename pattern: {CHANNEL}_{YYYY-MM-DD}_{TYPE}_{SLOT}[_{TAG}].{ext}
+  // e.g. OAP_2026-05-16_short_1.mp4 or OAG_2026-05-W3_long_D330.mp4
+  expectedFilename  String        @unique
+  examTag           String?       // e.g. "D330" for long videos
+
+  // Metadata pre-filled by team
+  title             String
+  description       String        @db.Text
+  tags              String[]      @default([])
+  categoryId        String        @default("27") // 27 = Education
+  defaultLanguage   String        @default("en")
+  madeForKids       Boolean       @default(false)
+
+  // When to publish (UTC). Render as America/New_York in UI.
+  scheduledPublishAt DateTime
+
+  // Tracking
+  status            ContentStatus @default(planned)
+  driveFileId       String?       // video file
+  driveThumbId      String?       // thumbnail (jpg/png with same base name)
+  youtubeVideoId    String?
+  youtubeUrl        String?
+
+  // Approval audit
+  uploadedAt        DateTime?
+  approvedAt        DateTime?
+  approvedById      String?
+  approvedBy        User?         @relation(fields: [approvedById], references: [id])
+  rejectedReason    String?
+
+  // Sheet write-back location
+  sheetId           String?
+  sheetTab          String?
+  sheetRow          Int?
+
+  // Failure tracking
+  lastError         String?
+  attempts          Int           @default(0)
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  events            ContentEvent[]
+
+  @@index([channelId, status])
+  @@index([scheduledPublishAt])
+  @@index([status])
+}
+
+model ContentEvent {
+  id              String       @id @default(cuid())
+  contentItemId   String
+  contentItem     ContentItem  @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  type            String       // "matched" | "approved" | "uploaded" | "scheduled" | "published" | "failed" | "rejected" | "edited"
+  actorEmail      String?
+  message         String?
+  meta            Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([contentItemId, createdAt])
+}
+
+// ───────── Auth ─────────
+model User {
+  id              String      @id @default(cuid())
+  email           String      @unique
+  name            String?
+  isApprover      Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+
+  approvedItems   ContentItem[]
+  sessions        Session[]
+  magicLinks      MagicLink[]
+}
+
+model MagicLink {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+}

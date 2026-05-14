@@ -1,0 +1,33 @@
+{
+  "name": "youtube-automation",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @yt/shared && npm run build -w @yt/api && npm run build -w @yt/worker && npm run build -w @yt/dashboard",
+    "dev:api": "npm run dev -w @yt/api",
+    "dev:worker": "npm run dev -w @yt/worker",
+    "dev:dashboard": "npm run dev -w @yt/dashboard",
+    "start:api": "npm run start -w @yt/api",
+    "start:worker": "npm run start -w @yt/worker",
+    "start:dashboard": "npm run start -w @yt/dashboard",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "typecheck": "npm run typecheck -w @yt/shared && npm run typecheck -w @yt/api && npm run typecheck -w @yt/worker && npm run typecheck -w @yt/dashboard"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
