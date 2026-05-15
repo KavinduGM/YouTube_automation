@@ -1,35 +1,17 @@
 # Dokploy-friendly stack: migrator + API + Worker + Dashboard.
 #
-# Postgres is provided externally (e.g. as a separate Dokploy "Database"
-# service) — set DATABASE_URL in Dokploy's Environment tab.
+# Postgres is provided externally (Dokploy database service) — set
+# DATABASE_URL in Dokploy's Environment tab.
 #
-# TLS + domain routing are handled by Dokploy's built-in Traefik proxy.
-# Assign domains to the `dashboard` (port 3000) and `api` (port 4000)
-# services in Dokploy's Domains UI.
+# TLS + domains: handled by Dokploy's built-in Traefik. Assign domains
+# to the dashboard (port 3000) and api (port 4000) services in the
+# Domains tab.
 #
-# Env vars are interpolated from the compose environment that Dokploy
-# injects when you set them in the "Environment" tab. This avoids
-# relying on a .env file that Dokploy may or may not write.
-
-x-app-env: &app-env
-  NODE_ENV: ${NODE_ENV:-production}
-  TZ: ${TZ:-America/New_York}
-  DASHBOARD_URL: ${DASHBOARD_URL}
-  API_URL: ${API_URL:-http://api:4000}
-  API_PORT: ${API_PORT:-4000}
-  DATABASE_URL: ${DATABASE_URL}
-  SESSION_SECRET: ${SESSION_SECRET}
-  ALLOWED_APPROVER_EMAILS: ${ALLOWED_APPROVER_EMAILS}
-  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
-  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-  GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
-  RESEND_API_KEY: ${RESEND_API_KEY}
-  RESEND_FROM: ${RESEND_FROM}
-  DRIVE_POLL_INTERVAL_SECONDS: ${DRIVE_POLL_INTERVAL_SECONDS:-120}
-  SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS:-60}
-  TMP_DIR: ${TMP_DIR:-/app/tmp}
-  LOG_LEVEL: ${LOG_LEVEL:-info}
+# IMPORTANT: env vars are NOT declared here. Dokploy injects everything
+# from its Environment tab into every service in this stack. If you run
+# this compose outside Dokploy, you need to either (a) export the env
+# vars in your shell before `docker compose up`, or (b) add an
+# `env_file: .env` line under each service.
 
 services:
   # One-shot job: syncs DB schema, then exits 0.
@@ -38,14 +20,12 @@ services:
     image: yt-automation
     pull_policy: never
     command: ["npx", "prisma", "db", "push", "--accept-data-loss", "--skip-generate"]
-    environment: *app-env
     restart: "no"
 
   api:
     image: yt-automation
     pull_policy: never
     command: ["node", "apps/api/dist/index.js"]
-    environment: *app-env
     expose:
       - "4000"
     depends_on:
@@ -62,7 +42,6 @@ services:
     image: yt-automation
     pull_policy: never
     command: ["node", "apps/worker/dist/index.js"]
-    environment: *app-env
     volumes:
       - workertmp:/app/tmp
     depends_on:
@@ -75,7 +54,6 @@ services:
     pull_policy: never
     working_dir: /app/apps/dashboard
     command: ["node", "/app/node_modules/next/dist/bin/next", "start", "-p", "3000"]
-    environment: *app-env
     expose:
       - "3000"
     depends_on:
