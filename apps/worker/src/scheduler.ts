@@ -81,6 +81,7 @@ async function processItem(itemId: string): Promise<void> {
 
     let videoId: string;
     let url: string;
+    let thumbnailError: string | undefined;
     if (effectivePublishAt) {
       const result = await uploadAndSchedule({
         channelId: item.channelId,
@@ -97,6 +98,7 @@ async function processItem(itemId: string): Promise<void> {
       });
       videoId = result.videoId;
       url = result.url;
+      thumbnailError = result.thumbnailError;
     } else {
       // Publish immediately (scheduled time has passed)
       logger.warn({ itemId }, 'scheduled time has passed; publishing immediately');
@@ -114,6 +116,7 @@ async function processItem(itemId: string): Promise<void> {
       });
       videoId = result.videoId;
       url = result.url;
+      thumbnailError = result.thumbnailError;
     }
 
     await prisma.contentItem.update({
@@ -122,15 +125,19 @@ async function processItem(itemId: string): Promise<void> {
         status: effectivePublishAt ? 'scheduled' : 'published',
         youtubeVideoId: videoId,
         youtubeUrl: url,
-        lastError: null,
+        // Keep the thumbnail warning visible in the UI but don't retry —
+        // the video itself is live.
+        lastError: thumbnailError ? `Video uploaded but thumbnail failed: ${thumbnailError}` : null,
       },
     });
     await prisma.contentEvent.create({
       data: {
         contentItemId: item.id,
         type: effectivePublishAt ? 'scheduled' : 'published',
-        message: `YouTube videoId=${videoId}`,
-        meta: { url, publishAt: effectivePublishAt?.toISOString() ?? null },
+        message: thumbnailError
+          ? `YouTube videoId=${videoId} (thumbnail upload failed)`
+          : `YouTube videoId=${videoId}`,
+        meta: { url, publishAt: effectivePublishAt?.toISOString() ?? null, thumbnailError: thumbnailError ?? null },
       },
     });
 

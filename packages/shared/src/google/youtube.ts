@@ -20,6 +20,12 @@ export interface UploadOptions {
 export interface UploadResult {
   videoId: string;
   url: string;
+  /**
+   * Set if the video upload succeeded but setting the custom thumbnail
+   * failed (typically because the channel isn't verified). The video
+   * itself is fine; YouTube uses an auto-generated thumbnail.
+   */
+  thumbnailError?: string;
 }
 
 // Upload a video to YouTube and schedule it. Uses resumable upload.
@@ -62,6 +68,7 @@ export async function uploadAndSchedule(opts: UploadOptions): Promise<UploadResu
   const videoId = insertRes.data.id;
   if (!videoId) throw new Error('YouTube upload returned no video id');
 
+  let thumbnailError: string | undefined;
   if (opts.thumbnailFilePath) {
     try {
       await yt.thumbnails.set({
@@ -72,16 +79,16 @@ export async function uploadAndSchedule(opts: UploadOptions): Promise<UploadResu
         },
       });
     } catch (err) {
-      // Don't fail the whole upload for a thumbnail problem; surface for ops.
-      throw new Error(
-        `Video uploaded as ${videoId} but thumbnail failed: ${(err as Error).message}`,
-      );
+      // Video is already uploaded; don't lose it by throwing. Caller
+      // records the warning and the operator can fix it manually.
+      thumbnailError = (err as Error).message ?? String(err);
     }
   }
 
   return {
     videoId,
     url: `https://www.youtube.com/watch?v=${videoId}`,
+    thumbnailError,
   };
 
   void fileStat; // kept for future progress reporting
