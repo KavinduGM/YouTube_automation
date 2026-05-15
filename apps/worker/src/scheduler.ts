@@ -209,11 +209,9 @@ async function markFailed(itemId: string, msg: string): Promise<void> {
 }
 
 // Wrapper for immediate publish (no publishAt). Reuses the same uploader code path.
-async function uploadImmediate(opts: Parameters<typeof uploadAndSchedule>[0] extends infer T
-  ? T extends { publishAt: Date }
-    ? Omit<T, 'publishAt'>
-    : never
-  : never): Promise<{ videoId: string; url: string }> {
-  // Hack: pass a date 5s in the future so YouTube accepts publishAt; effectively immediate.
+async function uploadImmediate(
+  opts: Omit<Parameters<typeof uploadAndSchedule>[0], 'publishAt'>,
+): Promise<Awaited<ReturnType<typeof uploadAndSchedule>>> {
+  // Pass a date 1 min in the future so YouTube accepts publishAt; effectively immediate.
   return uploadAndSchedule({ ...opts, publishAt: new Date(Date.now() + 60_000) });
 }
