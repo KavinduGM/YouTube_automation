@@ -7,13 +7,16 @@ async function proxy(req: NextRequest, ctx: { params: { path: string[] } }) {
   const cookieHeader = cookies().getAll().map((c) => `${c.name}=${c.value}`).join('; ');
   const search = req.nextUrl.search ?? '';
   const path = '/' + (ctx.params.path ?? []).join('/');
+  const bodyText = ['GET', 'HEAD'].includes(req.method) ? undefined : await req.text();
+  // Don't send content-type when body is empty — Fastify rejects empty JSON bodies.
+  const headers: Record<string, string> = { cookie: cookieHeader };
+  if (bodyText && bodyText.length > 0) {
+    headers['content-type'] = req.headers.get('content-type') ?? 'application/json';
+  }
   const upstream = await fetch(`${API}${path}${search}`, {
     method: req.method,
-    headers: {
-      cookie: cookieHeader,
-      'content-type': req.headers.get('content-type') ?? 'application/json',
-    },
-    body: ['GET', 'HEAD'].includes(req.method) ? undefined : await req.text(),
+    headers,
+    body: bodyText && bodyText.length > 0 ? bodyText : undefined,
     redirect: 'manual',
   });
   const res = new NextResponse(await upstream.text(), {
