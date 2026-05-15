@@ -19,7 +19,10 @@ export const YOUTUBE_SCOPES = [
 ];
 export const DRIVE_SHEETS_SCOPES = [
   ...IDENTITY_SCOPES,
-  'https://www.googleapis.com/auth/drive.readonly',
+  // Full Drive access — needed to MOVE files into the "published" folder
+  // after upload. drive.readonly + drive.file together are not sufficient
+  // because the editor uploads files outside our app's reach.
+  'https://www.googleapis.com/auth/drive',
   'https://www.googleapis.com/auth/spreadsheets',
 ];
 

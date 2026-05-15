@@ -6,6 +6,7 @@ interface Channel {
   id: string; slug: string; name: string;
   youtubeChannelId: string | null;
   driveFolderId: string | null;
+  publishedFolderId: string | null;
   defaultSheetId: string | null;
   connected: boolean;
 }
@@ -23,7 +24,7 @@ export default function ChannelsClient({ initial }: {
   const [newSlug, setNewSlug] = useState<'OAP' | 'OAG' | 'NUR'>('OAP');
   const [newName, setNewName] = useState('');
 
-  async function patch(id: string, body: Partial<Pick<Channel, 'name' | 'driveFolderId' | 'defaultSheetId'>>) {
+  async function patch(id: string, body: Partial<Pick<Channel, 'name' | 'driveFolderId' | 'publishedFolderId' | 'defaultSheetId'>>) {
     setBusy(id); setErr(null);
     try {
       const res = await fetch(`/api/proxy/channels/${id}`, {
@@ -88,6 +89,12 @@ export default function ChannelsClient({ initial }: {
               <input type="text" defaultValue={c.driveFolderId ?? ''}
                      onBlur={(e) => patch(c.id, { driveFolderId: e.target.value || null })}
                      placeholder="paste Drive folder id" />
+            </div>
+            <div>
+              <label>Published folder ID <span className="muted">(optional)</span></label>
+              <input type="text" defaultValue={c.publishedFolderId ?? ''}
+                     onBlur={(e) => patch(c.id, { publishedFolderId: e.target.value || null })}
+                     placeholder="files moved here after upload" />
             </div>
             <div>
               <label>Default sheet ID</label>

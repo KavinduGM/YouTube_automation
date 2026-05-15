@@ -115,6 +115,26 @@ export async function downloadFile(fileId: string, destPath: string): Promise<vo
   }
 }
 
+// Move a file into a different folder. Drive uses a multi-parent model;
+// we replace all current parents with the target folder.
+export async function moveFile(fileId: string, toFolderId: string): Promise<void> {
+  const auth = await clientForDriveSheets();
+  const drive = driveClient(auth);
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'parents',
+    supportsAllDrives: true,
+  });
+  const removeParents = (meta.data.parents ?? []).join(',');
+  await drive.files.update({
+    fileId,
+    addParents: toFolderId,
+    removeParents,
+    supportsAllDrives: true,
+    fields: 'id,parents',
+  });
+}
+
 export async function getFileMeta(fileId: string): Promise<DriveFile | null> {
   const auth = await clientForDriveSheets();
   const drive = driveClient(auth);

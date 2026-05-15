@@ -6,6 +6,7 @@ interface Channel {
   id: string; slug: string; name: string;
   youtubeChannelId: string | null;
   driveFolderId: string | null;
+  publishedFolderId: string | null;
   defaultSheetId: string | null;
   connected: boolean;
 }

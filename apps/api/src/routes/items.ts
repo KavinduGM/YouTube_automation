@@ -116,6 +116,15 @@ export const itemRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/:id/approve', async (req, reply) => {
     const params = z.object({ id: z.string() }).parse(req.params);
+    // Safety: never approve something that's already on YouTube — would
+    // queue a duplicate upload.
+    const existing = await prisma.contentItem.findUnique({ where: { id: params.id } });
+    if (existing?.youtubeVideoId) {
+      return reply.code(409).send({
+        error: 'already_uploaded',
+        message: `This item is already on YouTube (videoId=${existing.youtubeVideoId}).`,
+      });
+    }
     const result = await prisma.contentItem.updateMany({
       where: { id: params.id, status: 'pending_approval' },
       data: { status: 'approved', approvedAt: new Date(), approvedById: req.user!.id },

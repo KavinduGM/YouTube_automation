@@ -26,6 +26,10 @@ model Channel {
   // Drive folder for this channel's monthly content (root)
   driveFolderId       String?
 
+  // Optional: where to move video + thumbnail after they go up to YouTube.
+  // Keeps the working folder clean. If null, files are left in place.
+  publishedFolderId   String?
+
   // Sheet for the current month (id only; system updates rows)
   defaultSheetId      String?
 

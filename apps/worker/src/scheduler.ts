@@ -7,7 +7,7 @@ import {
   sendEmail,
   failureEmail,
 } from '@yt/shared';
-import { downloadFile } from '@yt/shared/google/drive';
+import { downloadFile, moveFile } from '@yt/shared/google/drive';
 import { uploadAndSchedule } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
 
@@ -58,6 +58,34 @@ async function processItem(itemId: string): Promise<void> {
     include: { channel: true, approvedBy: true },
   });
   if (!item) return;
+
+  // Safety: if this item already has a youtubeVideoId, the upload has
+  // already happened. Don't re-upload — that would create a duplicate
+  // and burn quota. Mark as scheduled and move on.
+  if (item.youtubeVideoId) {
+    logger.warn(
+      { itemId, youtubeVideoId: item.youtubeVideoId },
+      'scheduler: item already has a YouTube video, skipping re-upload',
+    );
+    await prisma.contentItem.update({
+      where: { id: item.id },
+      data: {
+        status: 'scheduled',
+        lastError: 'Skipped re-upload — item already has youtubeVideoId',
+      },
+    });
+    await prisma.contentEvent.create({
+      data: {
+        contentItemId: item.id,
+        type: 'scheduled',
+        message: `Skipped duplicate upload (videoId=${item.youtubeVideoId} already set)`,
+      },
+    });
+    // Still try to move files if a published folder is configured
+    await maybeMoveToPublished(item).catch(() => {});
+    return;
+  }
+
   if (!item.driveFileId) {
     await markFailed(itemId, 'No driveFileId on item');
     return;
@@ -141,6 +169,13 @@ async function processItem(itemId: string): Promise<void> {
       },
     });
 
+    // Move both files to the channel's "published" folder if configured.
+    // Best-effort — failure here doesn't undo the YouTube upload.
+    await maybeMoveToPublished({
+      ...item,
+      // Re-fetch latest channel in case publishedFolderId was set after item creation
+    }).catch((err) => logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)'));
+
     // Sheet write-back (best effort)
     if (item.sheetId) {
       try {
@@ -214,4 +249,45 @@ async function uploadImmediate(
 ): Promise<Awaited<ReturnType<typeof uploadAndSchedule>>> {
   // Pass a date 1 min in the future so YouTube accepts publishAt; effectively immediate.
   return uploadAndSchedule({ ...opts, publishAt: new Date(Date.now() + 60_000) });
+}
+
+// Move the item's video + thumbnail to the channel's published folder
+// (if configured). Re-fetches channel from DB in case it was updated since.
+async function maybeMoveToPublished(item: {
+  id: string;
+  channelId: string;
+  driveFileId: string | null;
+  driveThumbId: string | null;
+}): Promise<void> {
+  const channel = await prisma.channel.findUnique({ where: { id: item.channelId } });
+  const target = channel?.publishedFolderId;
+  if (!target) return;
+
+  const moved: string[] = [];
+  if (item.driveFileId) {
+    try {
+      await moveFile(item.driveFileId, target);
+      moved.push(`video:${item.driveFileId}`);
+    } catch (err) {
+      logger.warn({ err, fileId: item.driveFileId, itemId: item.id }, 'move video failed');
+    }
+  }
+  if (item.driveThumbId) {
+    try {
+      await moveFile(item.driveThumbId, target);
+      moved.push(`thumb:${item.driveThumbId}`);
+    } catch (err) {
+      logger.warn({ err, fileId: item.driveThumbId, itemId: item.id }, 'move thumbnail failed');
+    }
+  }
+  if (moved.length > 0) {
+    await prisma.contentEvent.create({
+      data: {
+        contentItemId: item.id,
+        type: 'moved',
+        message: `Moved to published folder: ${moved.join(', ')}`,
+        meta: { folderId: target },
+      },
+    });
+  }
 }

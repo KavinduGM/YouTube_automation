@@ -15,6 +15,7 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
         name: c.name,
         youtubeChannelId: c.youtubeChannelId,
         driveFolderId: c.driveFolderId,
+        publishedFolderId: c.publishedFolderId,
         defaultSheetId: c.defaultSheetId,
         connected: Boolean(c.refreshTokenEnc),
       })),
@@ -27,6 +28,7 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
       slug: z.enum(['OAP', 'OAG', 'NUR']),
       name: z.string().min(1),
       driveFolderId: z.string().optional(),
+      publishedFolderId: z.string().optional(),
       defaultSheetId: z.string().optional(),
     }).parse(req.body);
     const ch = await prisma.channel.upsert({
@@ -35,11 +37,13 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
         slug: body.slug,
         name: body.name,
         driveFolderId: body.driveFolderId,
+        publishedFolderId: body.publishedFolderId,
         defaultSheetId: body.defaultSheetId,
       },
       update: {
         name: body.name,
         driveFolderId: body.driveFolderId,
+        publishedFolderId: body.publishedFolderId,
         defaultSheetId: body.defaultSheetId,
       },
     });
@@ -51,6 +55,7 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
     const body = z.object({
       name: z.string().min(1).optional(),
       driveFolderId: z.string().nullable().optional(),
+      publishedFolderId: z.string().nullable().optional(),
       defaultSheetId: z.string().nullable().optional(),
     }).parse(req.body);
     const ch = await prisma.channel.update({
