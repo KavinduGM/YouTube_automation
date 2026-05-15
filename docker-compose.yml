@@ -1,38 +1,23 @@
-# Full stack: Postgres + (one-shot) migrator + API + Worker + Dashboard + Caddy.
-# After filling .env, bring everything up with:
-#   docker compose up -d --build
+# Dokploy-friendly stack: migrator + API + Worker + Dashboard.
 #
-# Caddy provisions free Let's Encrypt TLS automatically once your DNS records
-# (DASHBOARD_DOMAIN, API_DOMAIN) point at this host's public IP.
-# If you don't have a domain yet, comment out the `caddy:` service and hit
-# the dashboard at http://YOUR_VPS_IP:3000 (set DASHBOARD_URL accordingly).
+# Postgres is provided externally (e.g. as a separate Dokploy "Database"
+# service) — set DATABASE_URL in the environment to point at it.
+#
+# TLS + domains are handled by Dokploy's built-in Traefik proxy. Assign
+# domains to the `dashboard` (port 3000) and `api` (port 4000) services
+# in Dokploy's Domains UI; no Caddy needed here.
+#
+# For local dev or non-Dokploy hosts that need bundled Postgres + Caddy,
+# see docker-compose.full.yml (or git history of this file).
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-yt}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yt}
-      POSTGRES_DB: ${POSTGRES_DB:-yt}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yt} -d ${POSTGRES_DB:-yt}"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  # One-shot job: runs DB migrations / schema sync, then exits 0.
+  # One-shot job: syncs DB schema, then exits 0.
   migrator:
     build: .
     image: yt-automation
     pull_policy: never
     command: ["npx", "prisma", "db", "push", "--accept-data-loss", "--skip-generate"]
     env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: "no"
 
   api:
@@ -43,8 +28,6 @@ services:
     expose:
       - "4000"
     depends_on:
-      postgres:
-        condition: service_healthy
       migrator:
         condition: service_completed_successfully
     restart: unless-stopped
@@ -62,8 +45,6 @@ services:
     volumes:
       - workertmp:/app/tmp
     depends_on:
-      postgres:
-        condition: service_healthy
       migrator:
         condition: service_completed_successfully
     restart: unless-stopped
@@ -81,23 +62,5 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    env_file: .env
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - api
-      - dashboard
-
 volumes:
-  pgdata:
   workertmp:
-  caddy_data:
-  caddy_config:
