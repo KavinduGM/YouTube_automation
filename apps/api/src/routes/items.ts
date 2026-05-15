@@ -87,10 +87,22 @@ export const itemRoutes: FastifyPluginAsync = async (app) => {
     return { item };
   });
 
-  app.post('/', async (req) => {
+  app.post('/', async (req, reply) => {
     const body = ItemCreate.parse(req.body);
-    const item = await prisma.contentItem.create({ data: body });
-    return { item };
+    try {
+      const item = await prisma.contentItem.create({ data: body });
+      return { item };
+    } catch (err) {
+      // Friendly message for the most common collision
+      const e = err as { code?: string; meta?: { target?: string[] } };
+      if (e.code === 'P2002' && e.meta?.target?.includes('expectedFilename')) {
+        return reply.code(409).send({
+          error: 'duplicate_filename',
+          message: `An item with filename "${body.expectedFilename}" already exists. Open the Items page to find and delete it, or pick a different date/slot/tag to make the filename unique.`,
+        });
+      }
+      throw err;
+    }
   });
 
   app.patch('/:id', async (req, reply) => {
