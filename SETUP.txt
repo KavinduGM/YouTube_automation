@@ -1,0 +1,426 @@
+================================================================================
+YOUTUBE AUTOMATION — DOKPLOY DEPLOYMENT GUIDE
+================================================================================
+
+This guide assumes:
+  - You're deploying through Dokploy on a Hostinger VPS.
+  - Postgres is already created in Dokploy (separate database service).
+  - You've added our project as a Dokploy "Compose" application using the
+    docker-compose.yml from the repo.
+
+By the end you'll have:
+  - https://dashboard.yourdomain.com — the approval UI
+  - https://api.yourdomain.com — the API (used by the dashboard + Google OAuth)
+  - All three Node services + the Dokploy-managed Postgres talking to each other
+  - Free Let's Encrypt TLS, auto-renewed (handled by Dokploy/Traefik)
+
+
+================================================================================
+STEP 1 — REMOVE CAddy AND POSTGRES FROM docker-compose.yml
+================================================================================
+
+Dokploy already runs a reverse proxy (Traefik) on ports 80/443, so the Caddy
+service in our compose file will fail to bind those ports. Postgres is also
+already managed by Dokploy.
+
+In the repo, edit docker-compose.yml and:
+
+  1. DELETE the entire `caddy:` service block.
+  2. DELETE the entire `postgres:` service block.
+  3. DELETE `caddy_data:` and `caddy_config:` from the `volumes:` section.
+  4. DELETE `pgdata:` from the `volumes:` section.
+  5. In `migrator:`, `api:`, `worker:` — remove the
+     `postgres: condition: service_healthy` line from `depends_on:`.
+     (Keep `migrator: condition: service_completed_successfully` on api/worker.)
+
+Commit and push the change to GitHub, then in Dokploy click "Reload" /
+"Deploy" so it picks up the new compose file.
+
+
+================================================================================
+STEP 2 — POINT DNS AT YOUR VPS
+================================================================================
+
+In your DNS provider (Hostinger, Cloudflare, etc.), create two A records:
+
+    dashboard.yourdomain.com    A    YOUR.VPS.PUBLIC.IP
+    api.yourdomain.com          A    YOUR.VPS.PUBLIC.IP
+
+Wait 1–5 minutes for propagation. Verify with:
+
+    dig +short dashboard.yourdomain.com
+    dig +short api.yourdomain.com
+
+Both should return your VPS IP.
+
+
+================================================================================
+STEP 3 — ASSIGN DOMAINS IN DOKPLOY
+================================================================================
+
+In Dokploy, open your YouTube Automation application (the Compose one):
+
+  1. Go to the "Domains" tab.
+
+  2. Click "Add Domain". Fill:
+        Host:           dashboard.yourdomain.com
+        Path:           /
+        Container Port: 3000
+        Service Name:   dashboard          (must match service name in compose)
+        HTTPS:          ON
+        Certificate:    Let's Encrypt
+     Save.
+
+  3. Click "Add Domain" again. Fill:
+        Host:           api.yourdomain.com
+        Path:           /
+        Container Port: 4000
+        Service Name:   api
+        HTTPS:          ON
+        Certificate:    Let's Encrypt
+     Save.
+
+  4. Dokploy fetches Let's Encrypt certificates automatically (~30 seconds).
+
+  5. Test in a browser:
+        https://api.yourdomain.com/health     → should return {"ok":true,...}
+        https://dashboard.yourdomain.com      → should show the sign-in page
+
+
+================================================================================
+STEP 4 — ENVIRONMENT VARIABLES IN DOKPLOY
+================================================================================
+
+In the Dokploy app, go to "Environment" and confirm these are all set
+(based on the .env.example). If you've already set them, double-check the
+values that depend on the new domains.
+
+Required:
+
+  NODE_ENV=production
+  TZ=America/New_York
+
+  # Public URLs the browser sees / Google redirects to
+  DASHBOARD_URL=https://dashboard.yourdomain.com
+  API_URL=http://api:4000                # internal Docker hostname (NOT the domain)
+  API_PORT=4000
+
+  # Database — point at the Dokploy-managed Postgres
+  # The host is the App Name you set when creating the DB (e.g. yt-automation-postgres)
+  DATABASE_URL=postgres://yt:THE_PASSWORD@yt-automation-postgres:5432/yt
+
+  # Auth
+  SESSION_SECRET=64_HEX_CHARS              # generate: openssl rand -hex 32
+  ALLOWED_APPROVER_EMAILS=you@example.com,teammate@example.com
+
+  # Encryption for OAuth tokens at rest
+  TOKEN_ENCRYPTION_KEY=64_HEX_CHARS        # generate: openssl rand -hex 32
+
+  # Google OAuth (filled in Step 5)
+  GOOGLE_CLIENT_ID=
+  GOOGLE_CLIENT_SECRET=
+  GOOGLE_OAUTH_REDIRECT_URI=https://api.yourdomain.com/oauth/google/callback
+
+  # Email
+  RESEND_API_KEY=re_xxxxxxxxxxxxxxx
+  RESEND_FROM=YT Automation <noreply@yourdomain.com>
+
+  # Worker tuning
+  DRIVE_POLL_INTERVAL_SECONDS=120
+  SCHEDULER_INTERVAL_SECONDS=60
+  TMP_DIR=/app/tmp
+  LOG_LEVEL=info
+
+NOT NEEDED (since we removed Caddy and the in-stack Postgres):
+  DASHBOARD_DOMAIN, API_DOMAIN, ACME_EMAIL, POSTGRES_USER,
+  POSTGRES_PASSWORD, POSTGRES_DB
+
+After saving env vars, hit "Redeploy" in Dokploy.
+
+
+================================================================================
+STEP 5 — GOOGLE CLOUD: OAUTH CLIENT
+================================================================================
+
+  1. Go to https://console.cloud.google.com → create a project named
+     "YouTube Automation".
+
+  2. APIs & Services → Library → enable each:
+        - YouTube Data API v3
+        - Google Drive API
+        - Google Sheets API
+
+  3. APIs & Services → OAuth consent screen
+        - User type: External
+        - App name: YouTube Automation
+        - Support email: yours
+        - Scopes: add youtube, youtube.upload, drive.readonly, spreadsheets,
+                  plus openid + email + profile
+        - Test users: add the 4 Google accounts you'll use:
+            * 1 owner of the team's Drive folders + Sheets
+            * 3 channel owners (OAP, OAG, Nursing YouTube channels)
+
+  4. APIs & Services → Credentials → Create Credentials → OAuth client ID
+        - Type: Web application
+        - Name: YT Automation
+        - Authorized redirect URIs (add ALL of these):
+            https://api.yourdomain.com/oauth/google/callback
+            http://localhost:4000/oauth/google/callback   (optional — local dev)
+
+  5. Copy the Client ID and Client Secret.
+
+  6. In Dokploy → Environment, paste them into:
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+     Click Redeploy.
+
+
+================================================================================
+STEP 6 — RESEND: EMAIL SETUP
+================================================================================
+
+  1. Sign up at https://resend.com.
+  2. Domains → Add Domain → enter "yourdomain.com".
+  3. Resend gives you ~3 DNS records (DKIM + SPF). Add them in your DNS
+     provider. Wait for "Verified" (usually <10 min).
+  4. API Keys → Create API Key → "YT Automation" → full access → copy.
+  5. In Dokploy → Environment:
+        RESEND_API_KEY=re_xxxxxxxxxxxxxxx
+        RESEND_FROM=YT Automation <noreply@yourdomain.com>
+     Click Redeploy.
+
+
+================================================================================
+STEP 7 — VERIFY THE STACK IS UP
+================================================================================
+
+In Dokploy:
+  - Open the Compose app → "Logs". You should see, for each service:
+        migrator   → "Datasource ... applied" → exits 0
+        api        → "api listening { port: 4000 }"
+        worker     → "worker starting"
+        dashboard  → "ready started server on 0.0.0.0:3000"
+  - Status should be Healthy / Running for all four.
+
+In a browser:
+  - https://api.yourdomain.com/health   → {"ok":true,"ts":"..."}
+  - https://dashboard.yourdomain.com    → sign-in form
+
+Common gotchas:
+  - "Cannot connect to database" → check DATABASE_URL hostname. The host is
+    the App Name of your Dokploy Postgres service (visible in its details page),
+    NOT "postgres".
+  - migrator stuck → the Postgres credentials in DATABASE_URL are wrong.
+  - 502 on the domains → certs may still be issuing; wait 60s and refresh.
+  - "No refresh_token returned" later in OAuth → revoke prior consent at
+    https://myaccount.google.com/permissions and retry.
+
+
+================================================================================
+STEP 8 — FIRST-TIME APP CONFIGURATION
+================================================================================
+
+8.1  Sign in to the dashboard
+     - Open https://dashboard.yourdomain.com
+     - Enter an email from ALLOWED_APPROVER_EMAILS
+     - Check inbox → click magic-link → you're in
+
+8.2  Connect Drive + Sheets (one-time, single Google account)
+     - Top nav → Channels
+     - Click "Connect Google (Drive + Sheets)"
+     - Sign in with the Google account that owns the team's Drive folders
+       AND the monthly Google Sheets
+     - Approve all requested scopes
+     - You'll be redirected back: "Connected: drive_sheets" appears at top
+
+8.3  Create the three channels
+     For each of OAP, OAG, NUR:
+
+     a. In the "Add channel" form at the bottom:
+            Slug: OAP (or OAG / NUR)
+            Display name: e.g. "Online Allied Prep"
+        Click "Create / update"
+
+     b. In the new card that appears, click "Connect YouTube".
+        IMPORTANT: switch your browser's active Google account to the one that
+        owns THAT specific YouTube channel before clicking, otherwise you'll
+        connect the wrong channel.
+
+     c. After redirect, the card shows the YouTube Channel ID — verify it
+        opens the right YouTube channel in a new tab.
+
+     d. Create the channel's monthly root folder in Google Drive
+        (e.g. "OAP/2026-05/"). Copy the folder ID from the URL — it's the
+        bit after /folders/ in
+        https://drive.google.com/drive/folders/THIS_PART
+        Paste into the "Drive folder ID" field on the channel card.
+        Click outside the field — it auto-saves on blur.
+
+     e. (Optional) paste the monthly Google Sheet ID in "Default sheet ID".
+        See Step 9 for the sheet column requirements.
+
+8.4  Confirm everything's connected
+     - Top of Channels page should show: "Connected as <your-email>" for
+       Drive+Sheets
+     - Each channel card should show its YouTube Channel ID + Drive folder ID
+
+
+================================================================================
+STEP 9 — (OPTIONAL) PREP THE GOOGLE SHEET FOR STATUS WRITE-BACK
+================================================================================
+
+If you want the system to write status back to your monthly content sheet:
+
+  - In row 1 of the sheet, add these column headers (case-insensitive,
+    in any order):
+        filename       (REQUIRED — used to match rows to content items)
+        status
+        youtube url
+        youtube_id
+        published_at
+        scheduled_at
+        approved_by
+
+  - Any subset of the optional columns works; the system updates only the
+    columns that exist.
+
+  - In the dashboard, when creating a content item, paste the Sheet ID
+    (the long token in the URL) and optionally the tab name.
+
+
+================================================================================
+STEP 10 — SMOKE TEST (DO THIS BEFORE REAL CONTENT)
+================================================================================
+
+10.1  Create one test item
+      - Top nav → "New item"
+      - Channel: OAP (or whichever has a test/throwaway YouTube channel)
+      - Type: short
+      - Date: TODAY's date (e.g. 2026-05-15)
+      - Slot: 1
+      - Tag: leave blank
+      - Extension: mp4
+      - "Expected filename" preview should read e.g. OAP_2026-05-15_short_1.mp4
+      - Title: "TEST — please ignore"
+      - Description: anything
+      - Publish at: 15–20 minutes from now in NY time
+      - Click "Create item" → status = planned
+
+10.2  Drop a test video into Drive
+      - Use any short .mp4 (5-second clip is fine)
+      - Rename it EXACTLY: OAP_2026-05-15_short_1.mp4
+      - Upload into the OAP channel's monthly Drive folder
+      - (Optional) drop a same-base-name .jpg next to it as the thumbnail
+
+10.3  Watch it flow
+      - Within ~2 minutes you'll get an email "Pending approval"
+      - Dashboard → Inbox → the item is there
+      - Click "Review" → verify metadata → click "Approve & schedule"
+      - Status flips: approved → scheduling → scheduled (within ~1 min)
+      - The "YouTube" field now has a link
+      - Open it → in YouTube Studio it shows as "Scheduled"
+      - After the publish time passes, next confirmer pass marks it "published"
+
+10.4  If anything fails
+      - In Dokploy → Logs, tail the worker:
+            "migrator successful but app can't reach DB" → DATABASE_URL wrong
+            "No refresh_token returned" → revoke at
+                https://myaccount.google.com/permissions → reconnect
+            "uploadAndSchedule" errors → typically wrong YT channel connected
+      - On the item detail page, "Last error" field shows the most recent
+        failure. Use the "Retry" button to re-queue after fixing.
+
+
+================================================================================
+STEP 11 — PRODUCTION WORKFLOW (EVERY MONTH)
+================================================================================
+
+ONCE per month, before the month starts:
+  - In the dashboard → "New item" — create one row per planned video:
+        12 long + 60 shorts for OAP
+        12 long + 60 shorts for OAG
+        16 long + 60 shorts for Nursing
+  - For each: precise expectedFilename + publish date/time in NY +
+    full title/description/tags. Optional sheet link.
+
+DAILY (editor):
+  - Drop the day's video files (and optional thumbnails) into the channel's
+    Drive folder, named exactly per the convention.
+  - Done. No clicks needed.
+
+DAILY (approver):
+  - Open the dashboard or click the email link
+  - Inbox shows pending items
+  - Open each → eyeball metadata → click Approve
+  - Edit title/desc inline before approving if needed
+  - Reject with a reason if no good — editor uploads a fresh version
+    with the same filename and watcher picks it up automatically
+
+
+================================================================================
+STEP 12 — DAY-2 OPS
+================================================================================
+
+Update to latest code:
+  1. git push your changes (or pull from GitHub)
+  2. In Dokploy → Compose app → click "Redeploy"
+  3. Migrator runs again automatically (no-op if schema unchanged)
+
+Backups:
+  - Dokploy → Postgres app → "Backups" tab — schedule a daily backup to
+    S3 / local volume.
+
+Logs:
+  - Dokploy → Compose app → "Logs" — tail per service.
+
+Restart one service:
+  - Dokploy → Compose app → click the service → "Restart"
+
+Open the database:
+  - Dokploy → Postgres app → "Internal Credentials" → use a tool like
+    DBeaver / TablePlus pointed at the External port (if exposed) or
+    via Dokploy's web SQL console.
+
+
+================================================================================
+APPENDIX A — FILENAME CONVENTION (CRITICAL)
+================================================================================
+
+Every Drive file MUST be named:
+
+    {CHANNEL}_{YYYY-MM-DD or YYYY-MM-Wn}_{TYPE}_{SLOT}[_{TAG}].{ext}
+
+  CHANNEL : OAP, OAG, or NUR
+  date    : 2026-05-16 (daily) or 2026-05-W3 (weekly long videos)
+  TYPE    : long, short, or post
+  SLOT    : integer (1, 2) — per-day index
+  TAG     : optional, e.g. D330 for exam-coded long videos
+  ext     : mp4, mov, m4v, webm (videos) — jpg or png (thumbnail)
+
+Examples:
+  OAP_2026-05-16_short_1.mp4
+  OAP_2026-05-16_short_1.jpg     ← matching thumbnail
+  OAG_2026-05-W3_long_D330.mp4
+  NUR_2026-05-16_short_2.mp4
+
+The thumbnail must share the SAME BASE NAME as the video — the watcher
+pairs them automatically. Filename is CASE-SENSITIVE on Drive.
+
+
+================================================================================
+APPENDIX B — STATUS LIFECYCLE
+================================================================================
+
+  planned ──(file appears in Drive)──▶ pending_approval ──▶ approved
+                                              │                │
+                                              │                ▼
+                                              │           scheduling
+                                              │                │
+                                              ▼                ▼
+                                         rejected           scheduled
+                                                               │
+                                                               ▼
+                                                          published
+
+  Anything → failed (retryable from dashboard)
+================================================================================
