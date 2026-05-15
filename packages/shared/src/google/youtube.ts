@@ -123,3 +123,21 @@ export async function getVideoStatus(channelId: string, videoId: string): Promis
     publishAt: v.status.publishAt ?? undefined,
   };
 }
+
+// Delete a video from YouTube. Works for scheduled (private) and live videos.
+// Returns true if deleted, false if YouTube reports it doesn't exist (already gone).
+export async function deleteVideo(channelId: string, videoId: string): Promise<boolean> {
+  const auth = await clientForChannel(channelId);
+  const yt = google.youtube({ version: 'v3', auth });
+  try {
+    await yt.videos.delete({ id: videoId });
+    return true;
+  } catch (err) {
+    const e = err as { code?: number; errors?: Array<{ reason?: string }> };
+    // 404 / videoNotFound — already deleted, treat as success
+    if (e.code === 404 || e.errors?.some((x) => x.reason === 'videoNotFound')) {
+      return false;
+    }
+    throw err;
+  }
+}

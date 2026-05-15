@@ -10,6 +10,8 @@ interface Item {
   scheduledPublishAt: string;
   status: string;
   driveFileId: string | null;
+  expectedFilename: string;
+  youtubeVideoId: string | null;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -114,6 +116,33 @@ export default function ItemEditor({ item }: { item: Item }) {
     finally { setBusy(null); }
   }
 
+  async function del(force: boolean) {
+    const onYouTube = Boolean(item.youtubeVideoId);
+    const msg = onYouTube
+      ? `Delete this item AND remove the video from YouTube?\n\nFilename: ${item.expectedFilename}\nYouTube ID: ${item.youtubeVideoId}\n\nThis cannot be undone.`
+      : `Delete this item?\n\nFilename: ${item.expectedFilename}\n\nThis frees the filename so you can create a new item with the same name.`;
+    if (!confirm(msg)) return;
+    setBusy('delete'); setErr(null);
+    try {
+      const res = await fetch(`/api/proxy/items/${item.id}${force ? '?force=1' : ''}`, {
+        method: 'DELETE', credentials: 'include',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        // If YouTube delete failed, offer force-delete
+        if (res.status === 502 && body?.error === 'youtube_delete_failed') {
+          if (confirm(`${body.message}\n\nProceed with FORCE delete (orphans the YouTube video)?`)) {
+            return del(true);
+          }
+        }
+        throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
+      }
+      // Redirect to items list after successful delete
+      router.push('/items');
+    } catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(null); }
+  }
+
   void API;
 
   return (
@@ -167,6 +196,12 @@ export default function ItemEditor({ item }: { item: Item }) {
         {!item.driveFileId && item.status === 'pending_approval' && (
           <span className="muted">No video file in Drive yet — cannot approve.</span>
         )}
+
+        {/* Delete is always available — confirms via the browser, removes the YouTube video too. */}
+        <span style={{ flex: 1 }} />
+        <button className="btn danger" onClick={() => del(false)} disabled={!!busy}>
+          {busy === 'delete' ? 'Deleting…' : 'Delete item'}
+        </button>
       </div>
     </div>
   );

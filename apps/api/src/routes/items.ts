@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@yt/shared';
+import { deleteVideo } from '@yt/shared/google/youtube';
 
 const ItemCreate = z.object({
   channelId: z.string(),
@@ -194,12 +195,40 @@ export const itemRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete('/:id', async (req, reply) => {
     const params = z.object({ id: z.string() }).parse(req.params);
+    const q = z.object({
+      // If true, delete the DB row even if YouTube delete fails (so the
+      // filename can be reused). Caller will need to clean YouTube manually.
+      force: z.coerce.boolean().optional(),
+    }).parse(req.query);
+
     const existing = await prisma.contentItem.findUnique({ where: { id: params.id } });
     if (!existing) return reply.code(404).send({ error: 'not_found' });
-    if (['scheduled', 'scheduling', 'published'].includes(existing.status)) {
-      return reply.code(409).send({ error: 'cannot delete an item that has reached YouTube' });
+
+    // If on YouTube, try to delete it there first.
+    let ytDeletedNote: string | undefined;
+    if (existing.youtubeVideoId) {
+      try {
+        const deleted = await deleteVideo(existing.channelId, existing.youtubeVideoId);
+        ytDeletedNote = deleted
+          ? `Deleted YouTube video ${existing.youtubeVideoId}`
+          : `YouTube video ${existing.youtubeVideoId} was already gone`;
+      } catch (err) {
+        const msg = (err as Error).message ?? String(err);
+        if (!q.force) {
+          return reply.code(502).send({
+            error: 'youtube_delete_failed',
+            message: `Could not delete the YouTube video (${existing.youtubeVideoId}): ${msg}. Delete it manually in YouTube Studio, then retry. Or call with ?force=1 to remove the DB row anyway.`,
+          });
+        }
+        ytDeletedNote = `YouTube delete FAILED but force=1 — orphaned: ${msg}`;
+      }
     }
+
     await prisma.contentItem.delete({ where: { id: params.id } });
-    return { ok: true };
+    req.log.info(
+      { itemId: params.id, actor: req.user?.email, ytNote: ytDeletedNote },
+      'item deleted',
+    );
+    return { ok: true, ytNote: ytDeletedNote };
   });
 };
