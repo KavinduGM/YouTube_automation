@@ -7,9 +7,10 @@ import {
   sendEmail,
   failureEmail,
 } from '@yt/shared';
-import { downloadFile, moveFile } from '@yt/shared/google/drive';
+import { downloadFile } from '@yt/shared/google/drive';
 import { uploadAndSchedule } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
+import { moveToPublishedFolder } from './move-to-published.js';
 
 const MAX_ATTEMPTS = 3;
 
@@ -82,7 +83,7 @@ async function processItem(itemId: string): Promise<void> {
       },
     });
     // Still try to move files if a published folder is configured
-    await maybeMoveToPublished(item).catch(() => {});
+    await moveToPublishedFolder(item.id).catch(() => {});
     return;
   }
 
@@ -171,10 +172,9 @@ async function processItem(itemId: string): Promise<void> {
 
     // Move both files to the channel's "published" folder if configured.
     // Best-effort — failure here doesn't undo the YouTube upload.
-    await maybeMoveToPublished({
-      ...item,
-      // Re-fetch latest channel in case publishedFolderId was set after item creation
-    }).catch((err) => logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)'));
+    await moveToPublishedFolder(item.id).catch((err) =>
+      logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)'),
+    );
 
     // Sheet write-back (best effort)
     if (item.sheetId) {
@@ -251,43 +251,3 @@ async function uploadImmediate(
   return uploadAndSchedule({ ...opts, publishAt: new Date(Date.now() + 60_000) });
 }
 
-// Move the item's video + thumbnail to the channel's published folder
-// (if configured). Re-fetches channel from DB in case it was updated since.
-async function maybeMoveToPublished(item: {
-  id: string;
-  channelId: string;
-  driveFileId: string | null;
-  driveThumbId: string | null;
-}): Promise<void> {
-  const channel = await prisma.channel.findUnique({ where: { id: item.channelId } });
-  const target = channel?.publishedFolderId;
-  if (!target) return;
-
-  const moved: string[] = [];
-  if (item.driveFileId) {
-    try {
-      await moveFile(item.driveFileId, target);
-      moved.push(`video:${item.driveFileId}`);
-    } catch (err) {
-      logger.warn({ err, fileId: item.driveFileId, itemId: item.id }, 'move video failed');
-    }
-  }
-  if (item.driveThumbId) {
-    try {
-      await moveFile(item.driveThumbId, target);
-      moved.push(`thumb:${item.driveThumbId}`);
-    } catch (err) {
-      logger.warn({ err, fileId: item.driveThumbId, itemId: item.id }, 'move thumbnail failed');
-    }
-  }
-  if (moved.length > 0) {
-    await prisma.contentEvent.create({
-      data: {
-        contentItemId: item.id,
-        type: 'moved',
-        message: `Moved to published folder: ${moved.join(', ')}`,
-        meta: { folderId: target },
-      },
-    });
-  }
-}
