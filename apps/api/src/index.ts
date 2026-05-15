@@ -11,7 +11,9 @@ import { authPlugin } from './plugins/auth.js';
 async function build() {
   const e = env();
   const app = Fastify({
-    logger,
+    // Fastify v5 requires `loggerInstance` for a pre-built pino logger;
+    // the `logger` option only accepts a config object.
+    loggerInstance: logger,
     bodyLimit: 10 * 1024 * 1024,
   });
 
