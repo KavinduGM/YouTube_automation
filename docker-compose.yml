@@ -1,5 +1,7 @@
-# DEBUG VERSION — dumps all env vars before starting the API so we can see
-# what Dokploy actually injects. Once we know the mechanism, we'll lock it in.
+# Dokploy injects env vars from the Environment tab as SHELL variables
+# at the time it runs `docker compose up`. We then expand them per service
+# via ${VAR} interpolation. No YAML anchors (Dokploy's preprocessor may
+# not expand them correctly).
 
 services:
   migrator:
@@ -9,10 +11,28 @@ services:
       - "-c"
       - |
         echo '======== ENV DUMP (migrator) ========'
-        env | sort
+        env | sort | grep -v -E '^(_|HOME|HOSTNAME|PATH|PWD|SHLVL|TERM|NODE_VERSION|YARN_VERSION)='
         echo '======== END ENV DUMP ========'
         npx prisma db push --accept-data-loss --skip-generate
-    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      TZ: ${TZ}
+      DASHBOARD_URL: ${DASHBOARD_URL}
+      API_URL: ${API_URL}
+      API_PORT: ${API_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ALLOWED_APPROVER_EMAILS: ${ALLOWED_APPROVER_EMAILS}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      DRIVE_POLL_INTERVAL_SECONDS: ${DRIVE_POLL_INTERVAL_SECONDS}
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
+      TMP_DIR: ${TMP_DIR}
+      LOG_LEVEL: ${LOG_LEVEL}
     restart: "no"
 
   api:
@@ -22,10 +42,28 @@ services:
       - "-c"
       - |
         echo '======== ENV DUMP (api) ========'
-        env | sort
+        env | sort | grep -v -E '^(_|HOME|HOSTNAME|PATH|PWD|SHLVL|TERM|NODE_VERSION|YARN_VERSION)='
         echo '======== END ENV DUMP ========'
         node apps/api/dist/index.js
-    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      TZ: ${TZ}
+      DASHBOARD_URL: ${DASHBOARD_URL}
+      API_URL: ${API_URL}
+      API_PORT: ${API_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ALLOWED_APPROVER_EMAILS: ${ALLOWED_APPROVER_EMAILS}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      DRIVE_POLL_INTERVAL_SECONDS: ${DRIVE_POLL_INTERVAL_SECONDS}
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
+      TMP_DIR: ${TMP_DIR}
+      LOG_LEVEL: ${LOG_LEVEL}
     expose:
       - "4000"
     depends_on:
@@ -36,7 +74,25 @@ services:
   worker:
     build: .
     command: ["node", "apps/worker/dist/index.js"]
-    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      TZ: ${TZ}
+      DASHBOARD_URL: ${DASHBOARD_URL}
+      API_URL: ${API_URL}
+      API_PORT: ${API_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ALLOWED_APPROVER_EMAILS: ${ALLOWED_APPROVER_EMAILS}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      DRIVE_POLL_INTERVAL_SECONDS: ${DRIVE_POLL_INTERVAL_SECONDS}
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
+      TMP_DIR: ${TMP_DIR}
+      LOG_LEVEL: ${LOG_LEVEL}
     volumes:
       - workertmp:/app/tmp
     depends_on:
@@ -48,7 +104,25 @@ services:
     build: .
     working_dir: /app/apps/dashboard
     command: ["node", "/app/node_modules/next/dist/bin/next", "start", "-p", "3000"]
-    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      TZ: ${TZ}
+      DASHBOARD_URL: ${DASHBOARD_URL}
+      API_URL: ${API_URL}
+      API_PORT: ${API_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ALLOWED_APPROVER_EMAILS: ${ALLOWED_APPROVER_EMAILS}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      DRIVE_POLL_INTERVAL_SECONDS: ${DRIVE_POLL_INTERVAL_SECONDS}
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
+      TMP_DIR: ${TMP_DIR}
+      LOG_LEVEL: ${LOG_LEVEL}
     expose:
       - "3000"
     depends_on:
