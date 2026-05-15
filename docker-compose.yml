@@ -33,6 +33,7 @@ services:
       SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
       TMP_DIR: ${TMP_DIR}
       LOG_LEVEL: ${LOG_LEVEL}
+    networks: [dokploy-network, default]
     restart: "no"
 
   api:
@@ -64,6 +65,7 @@ services:
       SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
       TMP_DIR: ${TMP_DIR}
       LOG_LEVEL: ${LOG_LEVEL}
+    networks: [dokploy-network, default]
     expose:
       - "4000"
     depends_on:
@@ -93,6 +95,7 @@ services:
       SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
       TMP_DIR: ${TMP_DIR}
       LOG_LEVEL: ${LOG_LEVEL}
+    networks: [dokploy-network, default]
     volumes:
       - workertmp:/app/tmp
     depends_on:
@@ -123,12 +126,21 @@ services:
       SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
       TMP_DIR: ${TMP_DIR}
       LOG_LEVEL: ${LOG_LEVEL}
+    networks: [dokploy-network, default]
     expose:
       - "3000"
     depends_on:
       api:
         condition: service_started
     restart: unless-stopped
+
+networks:
+  # Dokploy's cross-project Swarm overlay — Postgres lives here.
+  dokploy-network:
+    external: true
+  # Local bridge so api/worker/dashboard can resolve each other by service name.
+  default:
+    driver: bridge
 
 volumes:
   workertmp:
