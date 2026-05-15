@@ -8,11 +8,17 @@ import { prisma } from '../db.js';
 //   YouTube upload + manage:  youtube.upload, youtube
 //   Drive read:               drive.readonly
 //   Sheets read+write:        spreadsheets
+// Identity scopes — required so Google returns an id_token containing email.
+// Without these the callback gets no email and we can't key the connection.
+const IDENTITY_SCOPES = ['openid', 'email', 'profile'];
+
 export const YOUTUBE_SCOPES = [
+  ...IDENTITY_SCOPES,
   'https://www.googleapis.com/auth/youtube.upload',
   'https://www.googleapis.com/auth/youtube',
 ];
 export const DRIVE_SHEETS_SCOPES = [
+  ...IDENTITY_SCOPES,
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/spreadsheets',
 ];
