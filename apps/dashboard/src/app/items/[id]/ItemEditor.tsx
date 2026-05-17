@@ -12,6 +12,7 @@ interface Item {
   driveFileId: string | null;
   expectedFilename: string;
   youtubeVideoId: string | null;
+  editorTask?: { id: string; status: string } | null;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? '';

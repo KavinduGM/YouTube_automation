@@ -23,12 +23,16 @@ model Channel {
   // Scope granted (so we can detect when re-consent is needed)
   scopes              String?
 
-  // Drive folder for this channel's monthly content (root)
+  // Drive folder for this channel's monthly content (root). Raw uploads
+  // from admin and final uploads from editor both live in here (or its
+  // sub-folders). Watcher recurses.
   driveFolderId       String?
 
-  // Optional: where to move video + thumbnail after they go up to YouTube.
-  // Keeps the working folder clean. If null, files are left in place.
+  // Optional: move final video + thumbnail here after YouTube upload.
   publishedFolderId   String?
+
+  // Optional: move raw video here after the editor submits the final.
+  rawArchiveFolderId  String?
 
   // Sheet for the current month (id only; system updates rows)
   defaultSheetId      String?
@@ -37,10 +41,11 @@ model Channel {
   updatedAt           DateTime @updatedAt
 
   contentItems        ContentItem[]
+  publishSlots        PublishSlot[]
+  editorTasks         EditorTask[]
 }
 
 // ───────── Google service connection (for Drive + Sheets) ─────────
-// Separate OAuth grant for reading Drive + writing Sheets (single user).
 model GoogleConnection {
   id                  String   @id @default(cuid())
   email               String   @unique
@@ -76,42 +81,35 @@ model ContentItem {
   channel           Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   type              ContentType
-  // Strict filename pattern: {CHANNEL}_{YYYY-MM-DD}_{TYPE}_{SLOT}[_{TAG}].{ext}
-  // e.g. OAP_2026-05-16_short_1.mp4 or OAG_2026-05-W3_long_D330.mp4
   expectedFilename  String        @unique
-  examTag           String?       // e.g. "D330" for long videos
+  examTag           String?
 
   // Metadata pre-filled by team
   title             String
   description       String        @db.Text
   tags              String[]      @default([])
-  categoryId        String        @default("27") // 27 = Education
+  categoryId        String        @default("27")
   defaultLanguage   String        @default("en")
   madeForKids       Boolean       @default(false)
 
-  // When to publish (UTC). Render as America/New_York in UI.
   scheduledPublishAt DateTime
 
-  // Tracking
   status            ContentStatus @default(planned)
-  driveFileId       String?       // video file
-  driveThumbId      String?       // thumbnail (jpg/png with same base name)
+  driveFileId       String?
+  driveThumbId      String?
   youtubeVideoId    String?
   youtubeUrl        String?
 
-  // Approval audit
   uploadedAt        DateTime?
   approvedAt        DateTime?
   approvedById      String?
   approvedBy        User?         @relation(fields: [approvedById], references: [id])
   rejectedReason    String?
 
-  // Sheet write-back location
   sheetId           String?
   sheetTab          String?
   sheetRow          Int?
 
-  // Failure tracking
   lastError         String?
   attempts          Int           @default(0)
 
@@ -119,6 +117,8 @@ model ContentItem {
   updatedAt         DateTime      @updatedAt
 
   events            ContentEvent[]
+  editorTask        EditorTask?
+  publishSlot       PublishSlot?
 
   @@index([channelId, status])
   @@index([scheduledPublishAt])
@@ -129,7 +129,7 @@ model ContentEvent {
   id              String       @id @default(cuid())
   contentItemId   String
   contentItem     ContentItem  @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
-  type            String       // "matched" | "approved" | "uploaded" | "scheduled" | "published" | "failed" | "rejected" | "edited"
+  type            String
   actorEmail      String?
   message         String?
   meta            Json?
@@ -138,15 +138,110 @@ model ContentEvent {
   @@index([contentItemId, createdAt])
 }
 
+// ───────── Publish slots ─────────
+// Pre-defined publishing moments per channel + content type. As raw videos
+// come in, the next available slot is consumed and the item gets that time.
+enum SlotStatus {
+  available   // ready to be assigned to a new ContentItem
+  assigned    // tied to a ContentItem (may or may not be uploaded yet)
+  used        // ContentItem has been published
+  skipped     // manually marked unused
+}
+
+model PublishSlot {
+  id              String      @id @default(cuid())
+  channelId       String
+  channel         Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  type            ContentType
+  scheduledAt     DateTime
+  status          SlotStatus  @default(available)
+
+  assignedItemId  String?     @unique
+  assignedItem    ContentItem? @relation(fields: [assignedItemId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([channelId, type, status, scheduledAt])
+  @@unique([channelId, scheduledAt, type])
+}
+
+// ───────── Editor tasks ─────────
+// A raw upload from admin produces an EditorTask. The editor downloads
+// the raw, edits, and uploads the final (which fulfils the linked
+// ContentItem). One ContentItem per task.
+enum EditorTaskStatus {
+  pending             // raw detected, waiting for editor to start
+  in_progress         // editor clicked start
+  submitted           // editor uploaded final
+  revision_requested  // admin rejected, needs re-edit
+  done                // approved by admin
+  canceled            // raw was deleted before edit completed
+}
+
+model EditorTask {
+  id                String              @id @default(cuid())
+  channelId         String
+  channel           Channel             @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  rawDriveFileId    String              @unique
+  rawFilename       String
+  rawTag            String
+
+  // The ContentItem the editor's final upload will fulfil
+  contentItemId     String?             @unique
+  contentItem       ContentItem?        @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  assignedEditorId  String?
+  assignedEditor    User?               @relation(fields: [assignedEditorId], references: [id])
+
+  detectedType      ContentType?
+  durationMillis    Int?
+
+  status            EditorTaskStatus    @default(pending)
+  revisionNotes     String?
+
+  docs              EditorTaskDoc[]
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  startedAt         DateTime?
+  submittedAt       DateTime?
+  completedAt       DateTime?
+
+  @@index([status, createdAt])
+  @@index([channelId, status])
+}
+
+// Auxiliary docs alongside a raw video (theory.txt, question.txt, etc.).
+model EditorTaskDoc {
+  id              String      @id @default(cuid())
+  taskId          String
+  task            EditorTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  driveFileId     String
+  filename        String
+  mimeType        String?
+  kind            String?     // "theory" | "question" | "other"
+  sizeBytes       Int?
+  createdAt       DateTime    @default(now())
+}
+
 // ───────── Auth ─────────
+enum UserRole {
+  admin
+  editor
+}
+
 model User {
   id              String      @id @default(cuid())
   email           String      @unique
   name            String?
-  isApprover      Boolean     @default(true)
+  role            UserRole    @default(admin)
+  active          Boolean     @default(true)
   createdAt       DateTime    @default(now())
 
   approvedItems   ContentItem[]
+  assignedTasks   EditorTask[]
   sessions        Session[]
   magicLinks      MagicLink[]
 }

@@ -43,7 +43,9 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return res.json();
 }
 
-export async function getMe(): Promise<{ user?: { id: string; email: string } } | null> {
+export async function getMe(): Promise<{
+  user?: { id: string; email: string; name: string | null; role: 'admin' | 'editor' };
+} | null> {
   const res = await fetchAPI('/auth/me');
   if (res.status === 401) return null;
   if (!res.ok) return null;

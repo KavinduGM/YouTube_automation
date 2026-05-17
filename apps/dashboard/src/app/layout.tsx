@@ -10,19 +10,30 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const me = await getMe();
-  const signedIn = Boolean(me?.user);
+  const user = me?.user;
+  const isAdmin = user?.role === 'admin';
+  const isEditor = user?.role === 'editor';
   return (
     <html lang="en">
       <body>
-        {signedIn && (
+        {user && (
           <nav className="nav">
             <strong>YT Automation</strong>
-            <Link href="/inbox">Inbox</Link>
-            <Link href="/items">Items</Link>
-            <Link href="/items/new">New item</Link>
-            <Link href="/channels">Channels</Link>
+            {isAdmin && (
+              <>
+                <Link href="/inbox">Inbox</Link>
+                <Link href="/items">Items</Link>
+                <Link href="/tasks">Tasks</Link>
+                <Link href="/schedule">Schedule</Link>
+                <Link href="/channels">Channels</Link>
+                <Link href="/users">Users</Link>
+              </>
+            )}
+            {isEditor && (
+              <Link href="/editor/tasks">My tasks</Link>
+            )}
             <span className="spacer" />
-            <span className="muted">{me?.user?.email}</span>
+            <span className="muted">{user.email} <small>({user.role})</small></span>
             <form action="/api/auth/logout" method="post" style={{ display: 'inline' }}>
               <button className="btn small secondary" type="submit">Sign out</button>
             </form>

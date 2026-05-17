@@ -7,6 +7,7 @@ interface Channel {
   youtubeChannelId: string | null;
   driveFolderId: string | null;
   publishedFolderId: string | null;
+  rawArchiveFolderId: string | null;
   defaultSheetId: string | null;
   connected: boolean;
 }

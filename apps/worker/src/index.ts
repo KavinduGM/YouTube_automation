@@ -1,10 +1,9 @@
 import { env, logger } from '@yt/shared';
 import { runDriveWatcherOnce } from './drive-watcher.js';
+import { runRawWatcherOnce } from './raw-watcher.js';
 import { runSchedulerOnce } from './scheduler.js';
 import { runPublishConfirmerOnce } from './publish-confirmer.js';
-
-// Worker entry point. Polls Drive and the scheduling queue forever.
-// Each loop is independent; failures in one don't block the others.
+import { runOverdueCheckerOnce } from './overdue-checker.js';
 
 async function loop(name: string, fn: () => Promise<void>, intervalSec: number) {
   let stopping = false;
@@ -26,11 +25,16 @@ async function loop(name: string, fn: () => Promise<void>, intervalSec: number) 
 
 async function main() {
   const e = env();
-  logger.info({ tz: e.TZ, drivePoll: e.DRIVE_POLL_INTERVAL_SECONDS, sched: e.SCHEDULER_INTERVAL_SECONDS }, 'worker starting');
+  logger.info(
+    { tz: e.TZ, drivePoll: e.DRIVE_POLL_INTERVAL_SECONDS, sched: e.SCHEDULER_INTERVAL_SECONDS },
+    'worker starting',
+  );
   await Promise.all([
+    loop('raw-watcher', runRawWatcherOnce, e.DRIVE_POLL_INTERVAL_SECONDS),
     loop('drive-watcher', runDriveWatcherOnce, e.DRIVE_POLL_INTERVAL_SECONDS),
     loop('scheduler', runSchedulerOnce, e.SCHEDULER_INTERVAL_SECONDS),
-    loop('publish-confirmer', runPublishConfirmerOnce, 600), // every 10 min
+    loop('publish-confirmer', runPublishConfirmerOnce, 600),
+    loop('overdue-checker', runOverdueCheckerOnce, 3600), // hourly
   ]);
 }
 

@@ -16,6 +16,7 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
         youtubeChannelId: c.youtubeChannelId,
         driveFolderId: c.driveFolderId,
         publishedFolderId: c.publishedFolderId,
+        rawArchiveFolderId: c.rawArchiveFolderId,
         defaultSheetId: c.defaultSheetId,
         connected: Boolean(c.refreshTokenEnc),
       })),
@@ -29,6 +30,7 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
       name: z.string().min(1),
       driveFolderId: z.string().optional(),
       publishedFolderId: z.string().optional(),
+      rawArchiveFolderId: z.string().optional(),
       defaultSheetId: z.string().optional(),
     }).parse(req.body);
     const ch = await prisma.channel.upsert({
@@ -38,12 +40,14 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
         name: body.name,
         driveFolderId: body.driveFolderId,
         publishedFolderId: body.publishedFolderId,
+        rawArchiveFolderId: body.rawArchiveFolderId,
         defaultSheetId: body.defaultSheetId,
       },
       update: {
         name: body.name,
         driveFolderId: body.driveFolderId,
         publishedFolderId: body.publishedFolderId,
+        rawArchiveFolderId: body.rawArchiveFolderId,
         defaultSheetId: body.defaultSheetId,
       },
     });
@@ -56,6 +60,7 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
       name: z.string().min(1).optional(),
       driveFolderId: z.string().nullable().optional(),
       publishedFolderId: z.string().nullable().optional(),
+      rawArchiveFolderId: z.string().nullable().optional(),
       defaultSheetId: z.string().nullable().optional(),
     }).parse(req.body);
     const ch = await prisma.channel.update({

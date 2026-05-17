@@ -162,3 +162,72 @@ export async function getFileMeta(fileId: string): Promise<DriveFile | null> {
     parents: f.parents ?? [],
   };
 }
+
+// Probe a Drive video file's duration. Drive only has videoMediaMetadata
+// after it has fully processed the upload (can take a minute for large
+// files). Returns null if not yet available.
+export async function getVideoDurationMs(fileId: string): Promise<number | null> {
+  const auth = await clientForDriveSheets();
+  const drive = driveClient(auth);
+  const res = await drive.files.get({
+    fileId,
+    fields: 'id,videoMediaMetadata(durationMillis)',
+    supportsAllDrives: true,
+  });
+  const ms = res.data.videoMediaMetadata?.durationMillis;
+  if (!ms) return null;
+  const n = Number(ms);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Stream-upload a file to Drive (multipart resumable). Used by the editor
+// dashboard to push the edited video/thumbnail into the channel folder.
+export async function uploadStream(opts: {
+  parentFolderId: string;
+  filename: string;
+  mimeType: string;
+  body: NodeJS.ReadableStream;
+}): Promise<{ id: string }> {
+  const auth = await clientForDriveSheets();
+  const drive = driveClient(auth);
+  const res = await drive.files.create({
+    requestBody: {
+      name: opts.filename,
+      parents: [opts.parentFolderId],
+    },
+    media: {
+      mimeType: opts.mimeType,
+      body: opts.body,
+    },
+    supportsAllDrives: true,
+    fields: 'id',
+  });
+  if (!res.data.id) throw new Error('Drive upload returned no id');
+  return { id: res.data.id };
+}
+
+// Get a streamable read of a Drive file (for proxying downloads to the editor).
+export async function getFileStream(fileId: string): Promise<{
+  stream: NodeJS.ReadableStream;
+  mimeType: string;
+  name: string;
+  size: number;
+}> {
+  const auth = await clientForDriveSheets();
+  const drive = driveClient(auth);
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'name,mimeType,size',
+    supportsAllDrives: true,
+  });
+  const res = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' },
+  );
+  return {
+    stream: res.data,
+    mimeType: meta.data.mimeType ?? 'application/octet-stream',
+    name: meta.data.name ?? `file-${fileId}`,
+    size: Number(meta.data.size ?? 0),
+  };
+}

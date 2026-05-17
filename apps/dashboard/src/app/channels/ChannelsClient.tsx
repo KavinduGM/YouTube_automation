@@ -7,6 +7,7 @@ interface Channel {
   youtubeChannelId: string | null;
   driveFolderId: string | null;
   publishedFolderId: string | null;
+  rawArchiveFolderId: string | null;
   defaultSheetId: string | null;
   connected: boolean;
 }
@@ -24,7 +25,7 @@ export default function ChannelsClient({ initial }: {
   const [newSlug, setNewSlug] = useState<'OAP' | 'OAG' | 'NUR'>('OAP');
   const [newName, setNewName] = useState('');
 
-  async function patch(id: string, body: Partial<Pick<Channel, 'name' | 'driveFolderId' | 'publishedFolderId' | 'defaultSheetId'>>) {
+  async function patch(id: string, body: Partial<Pick<Channel, 'name' | 'driveFolderId' | 'publishedFolderId' | 'rawArchiveFolderId' | 'defaultSheetId'>>) {
     setBusy(id); setErr(null);
     try {
       const res = await fetch(`/api/proxy/channels/${id}`, {
@@ -94,7 +95,13 @@ export default function ChannelsClient({ initial }: {
               <label>Published folder ID <span className="muted">(optional)</span></label>
               <input type="text" defaultValue={c.publishedFolderId ?? ''}
                      onBlur={(e) => patch(c.id, { publishedFolderId: e.target.value || null })}
-                     placeholder="files moved here after upload" />
+                     placeholder="finals moved here after publish" />
+            </div>
+            <div>
+              <label>Raw archive folder ID <span className="muted">(optional)</span></label>
+              <input type="text" defaultValue={c.rawArchiveFolderId ?? ''}
+                     onBlur={(e) => patch(c.id, { rawArchiveFolderId: e.target.value || null })}
+                     placeholder="raw videos moved here after editor submits" />
             </div>
             <div>
               <label>Default sheet ID</label>
