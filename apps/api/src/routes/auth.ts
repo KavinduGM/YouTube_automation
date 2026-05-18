@@ -21,10 +21,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       where: { username: body.username },
     });
     // Use a constant-ish path even on miss to avoid trivial timing oracle.
-    const okPassword = user
+    const okPassword = user?.passwordHash
       ? await verifyPassword(body.password, user.passwordHash)
       : await verifyPassword(body.password, '$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalid.');
-    if (!user || !okPassword || !user.active) {
+    if (!user || !user.passwordHash || !okPassword || !user.active) {
       return reply.code(401).send({ error: 'invalid_credentials' });
     }
 
@@ -71,6 +71,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       newPassword: z.string().min(8).max(200),
     }).parse(req.body);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+    if (!user.passwordHash) return reply.code(400).send({ error: 'no_password_set' });
     const ok = await verifyPassword(body.currentPassword, user.passwordHash);
     if (!ok) return reply.code(401).send({ error: 'wrong_password' });
     const { hashPassword } = await import('@yt/shared');

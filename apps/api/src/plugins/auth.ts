@@ -36,7 +36,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     if (!session.user.active) return;
     req.user = {
       id: session.user.id,
-      username: session.user.username,
+      username: session.user.username ?? '',
       email: session.user.email,
       role: session.user.role as 'admin' | 'editor',
     };

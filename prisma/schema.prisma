@@ -258,15 +258,17 @@ enum UserRole {
 
 model User {
   id              String      @id @default(cuid())
-  // Username is the login identifier. Email is optional, kept for notifications.
-  username        String      @unique
+  // Username is the login identifier. Nullable to allow zero-downtime
+  // migration from the previous email-only schema; new users always have
+  // a username set, and the login route requires it.
+  username        String?     @unique
   email           String?     @unique
-  passwordHash    String
+  passwordHash    String?
   name            String?
   role            UserRole    @default(admin)
   active          Boolean     @default(true)
   createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  updatedAt       DateTime    @updatedAt @default(now())
 
   approvedItems   ContentItem[]
   assignedTasks   EditorTask[]
