@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 interface Channel {
   id: string; slug: string; name: string;
-  filenamePrefix: string;
+  filenamePrefix: string | null;
   hasQuestionVideos: boolean;
   hasAnimationVideos: boolean;
   hasShortVideos: boolean;
@@ -78,7 +78,7 @@ export default function ChannelsClient({
     finally { setBusy(null); }
   }
 
-  async function patch(id: string, body: Partial<Pick<Channel, 'name' | 'filenamePrefix' | 'hasQuestionVideos' | 'hasAnimationVideos' | 'hasShortVideos'>>) {
+  async function patch(id: string, body: { name?: string; filenamePrefix?: string; hasQuestionVideos?: boolean; hasAnimationVideos?: boolean; hasShortVideos?: boolean }) {
     setBusy(id); setErr(null);
     try {
       const res = await fetch(`/api/proxy/channels/${id}`, {
@@ -191,7 +191,10 @@ export default function ChannelsClient({
             <div className="card-row">
               <div>
                 <h3 style={{ margin: 0 }}>
-                  {c.name} <span className="badge gray">{c.slug}</span> <span className="badge purple">{c.filenamePrefix}</span>
+                  {c.name} <span className="badge gray">{c.slug}</span>{' '}
+                  {c.filenamePrefix
+                    ? <span className="badge purple">{c.filenamePrefix}</span>
+                    : <span className="badge red">set prefix below</span>}
                 </h3>
                 <p className="muted" style={{ marginTop: 4 }}>
                   YouTube: {c.youtubeChannelId
@@ -215,8 +218,11 @@ export default function ChannelsClient({
               </div>
               <div>
                 <label>Filename prefix</label>
-                <input type="text" defaultValue={c.filenamePrefix}
-                       onBlur={(e) => e.target.value.toUpperCase() !== c.filenamePrefix && patch(c.id, { filenamePrefix: e.target.value.toUpperCase() })} />
+                <input type="text" defaultValue={c.filenamePrefix ?? ''}
+                       onBlur={(e) => {
+                         const v = e.target.value.toUpperCase();
+                         if (v && v !== c.filenamePrefix) patch(c.id, { filenamePrefix: v });
+                       }} />
               </div>
             </div>
 

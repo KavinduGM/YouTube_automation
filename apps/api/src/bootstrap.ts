@@ -27,7 +27,35 @@ export async function bootstrapAdmin(): Promise<void> {
     logger.error({ err }, 'bootstrap: legacy cleanup failed (continuing)');
   }
 
-  // 2. Ensure bootstrap admin exists
+  // 2. Backfill filenamePrefix on legacy channels (uppercased slug, no dashes)
+  try {
+    const channels = await prisma.channel.findMany({ where: { filenamePrefix: null } });
+    for (const c of channels) {
+      const prefix = c.slug.toUpperCase().replace(/-/g, '').slice(0, 12);
+      try {
+        await prisma.channel.update({ where: { id: c.id }, data: { filenamePrefix: prefix } });
+        logger.info({ slug: c.slug, prefix }, 'bootstrap: backfilled filenamePrefix');
+      } catch {
+        // Prefix collision — fall back to slug-derived + numeric suffix
+        let n = 2;
+        // try up to 50 variants
+        for (; n < 50; n++) {
+          try {
+            await prisma.channel.update({
+              where: { id: c.id },
+              data: { filenamePrefix: `${prefix}${n}` },
+            });
+            logger.warn({ slug: c.slug, prefix: `${prefix}${n}` }, 'bootstrap: prefix collision, used variant');
+            break;
+          } catch { /* try next */ }
+        }
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'bootstrap: filenamePrefix backfill failed (continuing)');
+  }
+
+  // 3. Ensure bootstrap admin exists
   const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) {
     logger.info({ username }, 'bootstrap: admin already exists, skipping');

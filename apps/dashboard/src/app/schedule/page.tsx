@@ -3,7 +3,7 @@ import { apiGet, getMe } from '@/lib/api';
 import ScheduleClient from './ScheduleClient';
 
 interface Channel {
-  id: string; slug: string; name: string; filenamePrefix: string;
+  id: string; slug: string; name: string; filenamePrefix: string | null;
   hasQuestionVideos: boolean; hasAnimationVideos: boolean; hasShortVideos: boolean;
 }
 interface Slot {

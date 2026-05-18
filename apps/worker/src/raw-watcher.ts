@@ -24,8 +24,12 @@ export async function runRawWatcherOnce(): Promise<void> {
   });
   if (channels.length === 0) return;
 
-  // Build prefix → channel map for fast lookup
-  const byPrefix = new Map(channels.map((c) => [c.filenamePrefix.toUpperCase(), c]));
+  // Build prefix → channel map for fast lookup; skip channels without prefix
+  const byPrefix = new Map(
+    channels
+      .filter((c): c is typeof c & { filenamePrefix: string } => Boolean(c.filenamePrefix))
+      .map((c) => [c.filenamePrefix.toUpperCase(), c]),
+  );
 
   for (const ch of channels) {
     const folders: { folderId: string; month: string | null }[] = [];

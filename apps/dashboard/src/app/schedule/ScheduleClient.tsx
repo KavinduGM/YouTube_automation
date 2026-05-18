@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Channel {
-  id: string; slug: string; name: string; filenamePrefix: string;
+  id: string; slug: string; name: string; filenamePrefix: string | null;
   hasQuestionVideos: boolean; hasAnimationVideos: boolean; hasShortVideos: boolean;
 }
 interface Slot {

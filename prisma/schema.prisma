@@ -18,7 +18,8 @@ model Channel {
   slug                String   @unique
   name                String
   // Uppercase prefix used in filenames, e.g. "OAP", "ABT".
-  filenamePrefix      String   @unique
+  // Nullable to ease migration; bootstrap + API require it for new channels.
+  filenamePrefix      String?  @unique
   youtubeChannelId    String?
   refreshTokenEnc     String?
   scopes              String?

@@ -4,7 +4,7 @@ import ChannelsClient from './ChannelsClient';
 
 interface Channel {
   id: string; slug: string; name: string;
-  filenamePrefix: string;
+  filenamePrefix: string | null;
   hasQuestionVideos: boolean;
   hasAnimationVideos: boolean;
   hasShortVideos: boolean;

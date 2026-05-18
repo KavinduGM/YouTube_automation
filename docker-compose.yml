@@ -13,6 +13,9 @@ services:
         echo '======== ENV DUMP (migrator) ========'
         env | sort | grep -v -E '^(_|HOME|HOSTNAME|PATH|PWD|SHLVL|TERM|NODE_VERSION|YARN_VERSION)='
         echo '======== END ENV DUMP ========'
+        echo "Pre-migration cleanup (idempotent)..."
+        node apps/api/dist/pre-migrate.js || echo "  (pre-migrate non-fatal errors above are fine on first deploy)"
+        echo "Running prisma db push..."
         npx prisma db push --accept-data-loss --skip-generate
     environment:
       NODE_ENV: ${NODE_ENV}
