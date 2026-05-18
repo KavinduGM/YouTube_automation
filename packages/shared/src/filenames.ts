@@ -1,46 +1,47 @@
-// Filename convention:
-//   {CHANNEL}_{YYYY-MM-DD or YYYY-MM-Wn}_{TYPE}_{SLOT}[_{TAG}].{ext}
-// Examples:
-//   OAP_2026-05-16_short_1.mp4
-//   OAG_2026-05-W3_long_D330.mp4
-//   NUR_2026-05-16_short_2.mp4
+// Filename helpers. Channels are dynamic — the watcher looks up
+// channel.filenamePrefix at runtime, so we don't hardcode prefixes here.
 //
-// CHANNEL: OAP | OAG | NUR
-// TYPE:    long | short | post
-// SLOT:    integer (per-day index) — for long videos with weekly identifier, use exam tag at the end
-// TAG:     optional — exam code for long videos (e.g. D330)
+// RAW upload patterns (admin → Drive):
+//   Long question:   {PREFIX}_{TAG}_Question[s].{ext}
+//   Long animation:  {PREFIX}_{TAG}_Animation[s].{ext}
+//   Short (N-th):    {PREFIX}_{TAG}_Short_{N}.{ext}
+//   Thumbnail:       <same base>_thumb.{jpg|png}
+//
+// FINAL filename pattern (system-computed, also matches editor's upload):
+//   {PREFIX}_{YYYY-MM-DD}_{TYPE}_{SLOT}_{TAG}[_{FORMAT}].{ext}
+//   e.g. ABT_2026-05-22_long_1_D300_question.mp4
+//        ABT_2026-05-22_short_1_D300.mp4
 
-export type ChannelSlug = 'OAP' | 'OAG' | 'NUR';
 export type ContentTypeSlug = 'long' | 'short' | 'post';
+export type VideoFormatSlug = 'question' | 'animation';
 
-export interface ParsedFilename {
-  channel: ChannelSlug;
-  datePart: string; // raw date or week token (e.g. 2026-05-16 or 2026-05-W3)
+export interface ParsedFinalFilename {
+  prefix: string;
+  datePart: string; // YYYY-MM-DD
   type: ContentTypeSlug;
-  slot: string; // numeric or non-numeric (e.g. D330 for long)
+  slot: string;
   tag?: string;
-  ext: string; // without dot
-  baseName: string; // filename without extension
+  format?: VideoFormatSlug;
+  ext: string;
+  baseName: string;
 }
 
-const CHANNELS: ReadonlySet<ChannelSlug> = new Set(['OAP', 'OAG', 'NUR']);
-const TYPES: ReadonlySet<ContentTypeSlug> = new Set(['long', 'short', 'post']);
+// Final filename: {PREFIX}_{YYYY-MM-DD}_{TYPE}_{SLOT}[_{TAG}][_{FORMAT}].{ext}
+// Old format also accepted: {PREFIX}_{YYYY-MM-Wn}_{TYPE}_{SLOT}[_{TAG}].{ext}
+const FINAL_RE = /^([A-Z][A-Z0-9]+)_([0-9]{4}-[0-9]{2}(?:-[0-9]{2}|-W[0-9]{1,2}))_([a-z]+)_([A-Za-z0-9]+)(?:_([A-Za-z0-9-]+))?(?:_(question|animation))?\.([A-Za-z0-9]+)$/i;
 
-const FILENAME_RE = /^([A-Z]{2,4})_([0-9]{4}-[0-9]{2}(?:-[0-9]{2}|-W[0-9]{1,2}))_([a-z]+)_([A-Za-z0-9]+)(?:_([A-Za-z0-9]+))?\.([A-Za-z0-9]+)$/;
-
-export function parseFilename(filename: string): ParsedFilename | null {
-  const m = FILENAME_RE.exec(filename);
+export function parseFinalFilename(filename: string): ParsedFinalFilename | null {
+  const m = FINAL_RE.exec(filename);
   if (!m) return null;
-  const [, channel, datePart, type, slot, tag, ext] = m;
-  if (!channel || !datePart || !type || !slot || !ext) return null;
-  if (!CHANNELS.has(channel as ChannelSlug)) return null;
-  if (!TYPES.has(type as ContentTypeSlug)) return null;
+  const [, prefix, datePart, type, slot, tag, format, ext] = m;
+  if (!prefix || !datePart || !type || !slot || !ext) return null;
   return {
-    channel: channel as ChannelSlug,
+    prefix,
     datePart,
-    type: type as ContentTypeSlug,
+    type: type.toLowerCase() as ContentTypeSlug,
     slot,
-    tag,
+    tag: tag || undefined,
+    format: (format?.toLowerCase() as VideoFormatSlug) || undefined,
     ext: ext.toLowerCase(),
     baseName: filename.replace(/\.[A-Za-z0-9]+$/, ''),
   };
@@ -56,83 +57,89 @@ export function isImage(ext: string): boolean {
   return IMAGE_EXTS.has(ext.toLowerCase());
 }
 
-// Compute the canonical "expected filename" base (without extension) for a content item.
-export function expectedBaseName(opts: {
-  channel: ChannelSlug;
-  datePart: string;
-  type: ContentTypeSlug;
-  slot: string;
-  tag?: string;
-}): string {
-  const tag = opts.tag ? `_${opts.tag}` : '';
-  return `${opts.channel}_${opts.datePart}_${opts.type}_${opts.slot}${tag}`;
-}
-
-// ─────── Raw filename pattern ───────
-// Raw uploads from admin use the simpler pattern:
-//   {CHANNEL}_{TAG}.{ext}
-// Where TAG starts with a letter (distinguishes from finals whose second
-// position is a year, e.g. "2026-05-16").
-// Examples:
-//   OAP_D440.mp4
-//   NUR_NCLEX-cardio.mp4
-//   OAG_D330.mov
-//
-// Doc files alongside follow the same prefix:
-//   OAP_D440_theory.txt
-//   OAP_D440_question.pdf
+// ─────── Raw filename patterns ───────
 
 export interface ParsedRawFilename {
-  channel: ChannelSlug;
+  prefix: string;
   tag: string;
+  // For long: 'question' | 'animation' (from the suffix word).
+  // For short: undefined, and `shortNumber` is set instead.
+  format?: VideoFormatSlug;
+  type: 'long' | 'short';
+  shortNumber?: number;
   ext: string;
-  baseName: string; // e.g. "OAP_D440"
+  baseName: string;
 }
 
-const RAW_RE = /^([A-Z]{2,4})_([A-Za-z][A-Za-z0-9-]*)\.([A-Za-z0-9]+)$/;
+// Long with format suffix: {PREFIX}_{TAG}_Question[s]|Animation[s].{ext}
+const RAW_LONG_RE = /^([A-Z][A-Z0-9]+)_([A-Za-z0-9-]+)_(question|questions|animation|animations)\.([A-Za-z0-9]+)$/i;
+
+// Short numbered: {PREFIX}_{TAG}_Short_{N}.{ext}
+const RAW_SHORT_RE = /^([A-Z][A-Z0-9]+)_([A-Za-z0-9-]+)_short_(\d+)\.([A-Za-z0-9]+)$/i;
 
 export function parseRawFilename(filename: string): ParsedRawFilename | null {
-  // Don't match if this is a final (position 2 starts with a digit = year)
-  if (/^[A-Z]{2,4}_\d/.test(filename)) return null;
-  const m = RAW_RE.exec(filename);
-  if (!m) return null;
-  const [, channel, tag, ext] = m;
-  if (!channel || !tag || !ext) return null;
-  if (!CHANNELS.has(channel as ChannelSlug)) return null;
-  return {
-    channel: channel as ChannelSlug,
-    tag,
-    ext: ext.toLowerCase(),
-    baseName: `${channel}_${tag}`,
-  };
+  // Exclude finals — position 2 starts with a year
+  if (/^[A-Z][A-Z0-9]+_\d{4}-/.test(filename)) return null;
+
+  const lm = RAW_LONG_RE.exec(filename);
+  if (lm) {
+    const [, prefix, tag, fmt, ext] = lm;
+    if (!prefix || !tag || !fmt || !ext) return null;
+    const format = (fmt.toLowerCase().startsWith('q') ? 'question' : 'animation') as VideoFormatSlug;
+    return {
+      prefix,
+      tag,
+      type: 'long',
+      format,
+      ext: ext.toLowerCase(),
+      baseName: filename.replace(/\.[A-Za-z0-9]+$/, ''),
+    };
+  }
+  const sm = RAW_SHORT_RE.exec(filename);
+  if (sm) {
+    const [, prefix, tag, num, ext] = sm;
+    if (!prefix || !tag || !num || !ext) return null;
+    return {
+      prefix,
+      tag,
+      type: 'short',
+      shortNumber: Number(num),
+      ext: ext.toLowerCase(),
+      baseName: filename.replace(/\.[A-Za-z0-9]+$/, ''),
+    };
+  }
+  return null;
 }
 
-// Detect doc files attached to a raw upload: e.g. OAP_D440_theory.txt
-// Returns the kind hint ("theory" | "question" | "other") and channel/tag.
+// Doc files alongside a raw video share the base name + extension change.
+// Accepted suffixes: _theory, _question (as theory companion), _notes.
+// E.g. OAP_D440_theory.txt
 export interface ParsedRawDoc {
-  channel: ChannelSlug;
-  tag: string;       // matches the raw's tag
+  prefix: string;
+  tag: string;
   kind: 'theory' | 'question' | 'other';
   ext: string;
   filename: string;
 }
 
-const RAW_DOC_RE = /^([A-Z]{2,4})_([A-Za-z][A-Za-z0-9-]*)_([A-Za-z]+)\.([A-Za-z0-9]+)$/;
+const RAW_DOC_RE = /^([A-Z][A-Z0-9]+)_([A-Za-z0-9-]+)_([A-Za-z]+)\.([A-Za-z0-9]+)$/;
 const DOC_EXTS = new Set(['txt', 'pdf', 'docx', 'doc', 'md', 'rtf']);
 
 export function parseRawDoc(filename: string): ParsedRawDoc | null {
-  if (/^[A-Z]{2,4}_\d/.test(filename)) return null; // exclude finals
+  if (/^[A-Z][A-Z0-9]+_\d{4}-/.test(filename)) return null;
   const m = RAW_DOC_RE.exec(filename);
   if (!m) return null;
-  const [, channel, tag, suffix, ext] = m;
-  if (!channel || !tag || !suffix || !ext) return null;
-  if (!CHANNELS.has(channel as ChannelSlug)) return null;
+  const [, prefix, tag, suffix, ext] = m;
+  if (!prefix || !tag || !suffix || !ext) return null;
   if (!DOC_EXTS.has(ext.toLowerCase())) return null;
+  // Don't treat raw-format suffixes as docs
+  if (/^(short|question|questions|animation|animations)$/i.test(suffix)) return null;
   let kind: ParsedRawDoc['kind'] = 'other';
   if (/^theor/i.test(suffix)) kind = 'theory';
   else if (/^quest/i.test(suffix)) kind = 'question';
+  else if (/^notes$/i.test(suffix)) kind = 'other';
   return {
-    channel: channel as ChannelSlug,
+    prefix,
     tag,
     kind,
     ext: ext.toLowerCase(),
@@ -140,37 +147,39 @@ export function parseRawDoc(filename: string): ParsedRawDoc | null {
   };
 }
 
-// ─────── Final filename builder from a publish slot ───────
-// Given a slot's scheduledAt + channel + type, produce the "datePart"
-// portion of the final filename. We use YYYY-MM-DD for daily content
-// (shorts) and YYYY-MM-Wn for weekly content (long videos).
-export function datePartFor(opts: { scheduledAt: Date; type: ContentTypeSlug }): string {
+// ─────── Final filename builder ───────
+
+// All scheduled videos (long and short) get a YYYY-MM-DD datePart.
+export function datePartFor(opts: { scheduledAt: Date }): string {
   const d = opts.scheduledAt;
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  if (opts.type === 'long') {
-    // Week-of-month (1..5) where week 1 contains the 1st of the month.
-    const dayOfMonth = d.getUTCDate();
-    const week = Math.floor((dayOfMonth - 1) / 7) + 1;
-    return `${y}-${m}-W${week}`;
-  }
   const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
-// Compute slot number for a date+channel+type by counting how many slots
-// of the same channel+type+date(/week) come before this one.
-// Pass in the position (1..N) returned from a DB query.
 export function computeExpectedFilename(opts: {
-  channel: ChannelSlug;
+  prefix: string;
   type: ContentTypeSlug;
   scheduledAt: Date;
-  slot: number;          // 1-indexed slot within the day/week
-  tag?: string;          // exam tag e.g. "D440"
-  ext?: string;          // defaults to "mp4"
+  slot: number;
+  tag?: string;
+  format?: VideoFormatSlug;
+  ext?: string;
 }): string {
-  const datePart = datePartFor({ scheduledAt: opts.scheduledAt, type: opts.type });
+  const datePart = datePartFor({ scheduledAt: opts.scheduledAt });
   const tag = opts.tag ? `_${opts.tag}` : '';
+  const format = opts.format ? `_${opts.format}` : '';
   const ext = opts.ext ?? 'mp4';
-  return `${opts.channel}_${datePart}_${opts.type}_${opts.slot}${tag}.${ext}`;
+  return `${opts.prefix}_${datePart}_${opts.type}_${opts.slot}${tag}${format}.${ext}`;
+}
+
+// Suggest a default filenamePrefix from a channel name or slug.
+// "AB Test" → "ABTEST"; "ab-test" → "ABTEST"; "Online Allied Prep" → "OAP" (first letters of each word capped to 6).
+export function suggestFilenamePrefix(name: string): string {
+  const words = name.trim().split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (words.length >= 2 && words.length <= 6) {
+    return words.map((w) => w[0]!.toUpperCase()).join('').slice(0, 6);
+  }
+  return name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8) || 'CHN';
 }

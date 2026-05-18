@@ -4,6 +4,10 @@ import ChannelsClient from './ChannelsClient';
 
 interface Channel {
   id: string; slug: string; name: string;
+  filenamePrefix: string;
+  hasQuestionVideos: boolean;
+  hasAnimationVideos: boolean;
+  hasShortVideos: boolean;
   youtubeChannelId: string | null;
   driveFolderId: string | null;
   publishedFolderId: string | null;
@@ -15,25 +19,21 @@ interface Channel {
 export default async function ChannelsPage({
   searchParams,
 }: {
-  searchParams: { connected?: string; oauth_error?: string; channelId?: string };
+  searchParams: { connected?: string; oauth_error?: string };
 }) {
   const me = await getMe();
   if (!me?.user) redirect('/login');
-
+  if (me.user.role !== 'admin') redirect('/');
   const data = await apiGet<{ channels: Channel[]; driveSheets: { email: string } | null }>('/channels');
   return (
     <>
-      <h1>Channels & connections</h1>
+      <h1>Channels</h1>
+      <p className="muted">Create channels, set their filename prefix, and connect each to its YouTube account.</p>
       {searchParams.connected && (
-        <div className="card" style={{ background: '#ecfdf5' }}>
-          ✓ Connected: {searchParams.connected}
-          {searchParams.channelId ? ` (channel ${searchParams.channelId})` : ''}
-        </div>
+        <div className="alert ok">Connected: {searchParams.connected}</div>
       )}
       {searchParams.oauth_error && (
-        <div className="card" style={{ background: '#fef2f2' }}>
-          OAuth error: {searchParams.oauth_error}
-        </div>
+        <div className="alert error">OAuth error: {searchParams.oauth_error}</div>
       )}
       <ChannelsClient initial={data} />
     </>

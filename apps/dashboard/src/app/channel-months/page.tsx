@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import MonthsClient from './MonthsClient';
 
-interface Channel { id: string; slug: string; name: string }
+interface Channel { id: string; slug: string; name: string; filenamePrefix: string }
 interface ChannelMonth {
   id: string;
   channelId: string;

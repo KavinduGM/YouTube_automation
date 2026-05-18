@@ -2,10 +2,15 @@ import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import ScheduleClient from './ScheduleClient';
 
-interface Channel { id: string; slug: string; name: string }
+interface Channel {
+  id: string; slug: string; name: string; filenamePrefix: string;
+  hasQuestionVideos: boolean; hasAnimationVideos: boolean; hasShortVideos: boolean;
+}
 interface Slot {
   id: string; channelId: string;
   type: 'long' | 'short' | 'post';
+  format: 'question' | 'animation' | null;
+  name: string | null;
   scheduledAt: string;
   status: 'available' | 'assigned' | 'used' | 'skipped';
   assignedItemId: string | null;
@@ -36,7 +41,7 @@ export default async function SchedulePage({
   return (
     <>
       <h1>Schedule</h1>
-      <p className="muted">Pre-fill publishing slots. As raw videos arrive, the next available slot is consumed.</p>
+      <p className="muted">Pre-fill publishing slots. As raw videos arrive, the next matching-format slot in the right month is consumed.</p>
       <ScheduleClient channels={channels} initialSlots={slots} channelId={channelId} month={month} />
     </>
   );

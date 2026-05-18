@@ -15,26 +15,23 @@ datasource db {
 // Holds the OAuth refresh token used to upload to that channel.
 model Channel {
   id                  String   @id @default(cuid())
-  slug                String   @unique // "OAP" | "OAG" | "NUR"
+  slug                String   @unique
   name                String
-  youtubeChannelId    String?  // populated after first OAuth
-  // Encrypted OAuth refresh token (AES-256-GCM, see shared/crypto.ts)
+  // Uppercase prefix used in filenames, e.g. "OAP", "ABT".
+  filenamePrefix      String   @unique
+  youtubeChannelId    String?
   refreshTokenEnc     String?
-  // Scope granted (so we can detect when re-consent is needed)
   scopes              String?
 
-  // Drive folder for this channel's monthly content (root). Raw uploads
-  // from admin and final uploads from editor both live in here (or its
-  // sub-folders). Watcher recurses.
+  // Content flags — what this channel publishes.
+  hasQuestionVideos   Boolean  @default(false)
+  hasAnimationVideos  Boolean  @default(false)
+  hasShortVideos      Boolean  @default(true)
+
+  // Legacy fallback fields (use ChannelMonth instead).
   driveFolderId       String?
-
-  // Optional: move final video + thumbnail here after YouTube upload.
   publishedFolderId   String?
-
-  // Optional: move raw video here after the editor submits the final.
   rawArchiveFolderId  String?
-
-  // Sheet for the current month (id only; system updates rows)
   defaultSheetId      String?
 
   createdAt           DateTime @default(now())
@@ -86,6 +83,13 @@ enum ContentType {
   post   // reserved for future; v1 does not auto-publish posts
 }
 
+// Sub-format for long videos. Channels with both flags on alternate
+// question/animation slots in their publishing schedule.
+enum VideoFormat {
+  question
+  animation
+}
+
 enum ContentStatus {
   planned            // metadata exists, no file yet
   uploaded           // file detected in Drive, awaiting approval
@@ -105,6 +109,7 @@ model ContentItem {
   channel           Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   type              ContentType
+  format            VideoFormat?  // long: question | animation; short: null
   expectedFilename  String        @unique
   examTag           String?
 
@@ -112,8 +117,9 @@ model ContentItem {
   title             String
   description       String        @db.Text
   tags              String[]      @default([])
-  categoryId        String        @default("27")
-  defaultLanguage   String        @default("en")
+  categoryId        String        @default("27")     // Education
+  defaultLanguage   String        @default("en-US")  // US English
+  recordingCountry  String        @default("US")     // ISO 3166-1 alpha-2
   madeForKids       Boolean       @default(false)
 
   scheduledPublishAt DateTime
@@ -177,6 +183,8 @@ model PublishSlot {
   channelId       String
   channel         Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
   type            ContentType
+  format          VideoFormat?  // long: question | animation; short: null
+  name            String?       // optional label, e.g. "Morning long"
   scheduledAt     DateTime
   status          SlotStatus  @default(available)
 
@@ -186,8 +194,8 @@ model PublishSlot {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  @@index([channelId, type, status, scheduledAt])
-  @@unique([channelId, scheduledAt, type])
+  @@index([channelId, type, format, status, scheduledAt])
+  @@unique([channelId, scheduledAt, type, format])
 }
 
 // ───────── Editor tasks ─────────
@@ -195,12 +203,12 @@ model PublishSlot {
 // the raw, edits, and uploads the final (which fulfils the linked
 // ContentItem). One ContentItem per task.
 enum EditorTaskStatus {
-  pending             // raw detected, waiting for editor to start
-  in_progress         // editor clicked start
-  submitted           // editor uploaded final
-  revision_requested  // admin rejected, needs re-edit
-  done                // approved by admin
-  canceled            // raw was deleted before edit completed
+  pending             // raw detected, waiting for editor
+  ongoing             // editor is working on it
+  submitted           // editor marked done — shows as "In Review" in UI
+  revision_requested  // admin asked for changes
+  completed           // admin approved the final video
+  canceled
 }
 
 model EditorTask {
@@ -220,6 +228,7 @@ model EditorTask {
   assignedEditor    User?               @relation(fields: [assignedEditorId], references: [id])
 
   detectedType      ContentType?
+  detectedFormat    VideoFormat?  // parsed from filename suffix
   durationMillis    Int?
 
   status            EditorTaskStatus    @default(pending)

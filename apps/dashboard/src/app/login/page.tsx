@@ -32,31 +32,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: '60px auto' }}>
-      <h1>Sign in</h1>
-      <form onSubmit={submit} className="card">
-        <label>Username</label>
-        <input
-          type="text" required value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          autoFocus autoComplete="username"
-        />
-        <label>Password</label>
-        <input
-          type="password" required value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
-        {err && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{err}</p>}
-        <div style={{ marginTop: 12 }}>
-          <button className="btn" type="submit" disabled={busy}>
-            {busy ? 'Signing in…' : 'Sign in'}
-          </button>
-        </div>
-        <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
-          Sessions last 1 year — you only need to do this once per device.
-        </p>
-      </form>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h1 style={{ textAlign: 'center', marginBottom: 8 }}>YT Automation</h1>
+        <p className="muted" style={{ textAlign: 'center', marginBottom: 20 }}>Sign in to continue</p>
+        <form onSubmit={submit} className="card">
+          <label>Username</label>
+          <input type="text" required value={username}
+                 onChange={(e) => setUsername(e.target.value)}
+                 autoFocus autoComplete="username" />
+          <label>Password</label>
+          <input type="password" required value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 autoComplete="current-password" />
+          {err && <div className="alert error" style={{ marginTop: 12 }}>{err}</div>}
+          <div style={{ marginTop: 16 }}>
+            <button className="btn primary" type="submit" disabled={busy} style={{ width: '100%' }}>
+              {busy ? 'Signing in…' : 'Sign in'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

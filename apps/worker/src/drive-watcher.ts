@@ -2,7 +2,7 @@ import {
   prisma,
   logger,
   env,
-  parseFilename,
+  parseFinalFilename,
   isVideo,
   isImage,
   sendEmail,
@@ -20,20 +20,21 @@ import { walkFolder } from '@yt/shared/google/drive';
 //  - If a file is found that does NOT match any item, log a warning (does NOT auto-create).
 
 export async function runDriveWatcherOnce(): Promise<void> {
-  const channels = await prisma.channel.findMany({
-    where: { driveFolderId: { not: null } },
-  });
-  if (channels.length === 0) {
-    logger.debug('drive-watcher: no channels with driveFolderId configured');
-    return;
-  }
-
+  // Walk every (channel × month) folder + any legacy channel-level folder.
+  const channels = await prisma.channel.findMany({ include: { months: true } });
+  if (channels.length === 0) return;
   for (const ch of channels) {
-    if (!ch.driveFolderId) continue;
-    try {
-      await processChannelFolder(ch.id, ch.driveFolderId);
-    } catch (err) {
-      logger.error({ err, channel: ch.slug }, 'drive-watcher: channel failed');
+    const folders: string[] = [];
+    for (const m of ch.months) {
+      if (m.driveFolderId) folders.push(m.driveFolderId);
+    }
+    if (ch.driveFolderId) folders.push(ch.driveFolderId);
+    for (const folderId of folders) {
+      try {
+        await processChannelFolder(ch.id, folderId);
+      } catch (err) {
+        logger.error({ err, channel: ch.slug, folderId }, 'drive-watcher: folder failed');
+      }
     }
   }
 }
@@ -46,12 +47,24 @@ async function processChannelFolder(channelId: string, folderId: string): Promis
   const byBase = new Map<string, Pair>();
 
   for (const f of files) {
-    const parsed = parseFilename(f.name);
-    if (!parsed) continue;
-    const slot = byBase.get(parsed.baseName) ?? {};
-    if (isVideo(parsed.ext)) slot.video = { id: f.id, name: f.name, ext: parsed.ext };
-    else if (isImage(parsed.ext)) slot.thumb = { id: f.id, name: f.name, ext: parsed.ext };
-    byBase.set(parsed.baseName, slot);
+    // Match the final-filename pattern; pair its base name with any image
+    // sharing the base. (Images alone won't parse, so try a soft match.)
+    const parsed = parseFinalFilename(f.name);
+    if (parsed) {
+      const slot = byBase.get(parsed.baseName) ?? {};
+      if (isVideo(parsed.ext)) slot.video = { id: f.id, name: f.name, ext: parsed.ext };
+      byBase.set(parsed.baseName, slot);
+      continue;
+    }
+    // Thumbnail: same base name as a final video, image extension
+    const m = /^(.+)\.([A-Za-z0-9]+)$/.exec(f.name);
+    if (!m) continue;
+    const [, base, ext] = m;
+    if (!base || !ext) continue;
+    if (!isImage(ext)) continue;
+    const slot = byBase.get(base) ?? {};
+    slot.thumb = { id: f.id, name: f.name, ext };
+    byBase.set(base, slot);
   }
 
   for (const [baseName, pair] of byBase) {

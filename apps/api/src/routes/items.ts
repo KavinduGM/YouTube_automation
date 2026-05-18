@@ -6,13 +6,15 @@ import { deleteVideo } from '@yt/shared/google/youtube';
 const ItemCreate = z.object({
   channelId: z.string(),
   type: z.enum(['long', 'short', 'post']),
-  expectedFilename: z.string().regex(/^[A-Z]{2,4}_/, 'must follow filename convention'),
+  format: z.enum(['question', 'animation']).nullable().optional(),
+  expectedFilename: z.string().regex(/^[A-Z][A-Z0-9]+_/, 'must follow filename convention'),
   examTag: z.string().optional(),
   title: z.string().min(1).max(100),
   description: z.string().max(5000),
   tags: z.array(z.string()).default([]),
   categoryId: z.string().default('27'),
-  defaultLanguage: z.string().default('en'),
+  defaultLanguage: z.string().default('en-US'),
+  recordingCountry: z.string().default('US'),
   madeForKids: z.boolean().default(false),
   scheduledPublishAt: z.coerce.date(),
   sheetId: z.string().optional(),
@@ -26,9 +28,11 @@ const ItemUpdate = z.object({
   tags: z.array(z.string()).optional(),
   categoryId: z.string().optional(),
   defaultLanguage: z.string().optional(),
+  recordingCountry: z.string().optional(),
   madeForKids: z.boolean().optional(),
   scheduledPublishAt: z.coerce.date().optional(),
   examTag: z.string().nullable().optional(),
+  format: z.enum(['question', 'animation']).nullable().optional(),
   sheetId: z.string().nullable().optional(),
   sheetTab: z.string().nullable().optional(),
 });
@@ -143,6 +147,11 @@ export const itemRoutes: FastifyPluginAsync = async (app) => {
       data: { status: 'approved', approvedAt: new Date(), approvedById: req.user!.id },
     });
     if (result.count === 0) return reply.code(409).send({ error: 'not_in_pending_approval' });
+    // Mark linked EditorTask as completed (best-effort).
+    await prisma.editorTask.updateMany({
+      where: { contentItemId: params.id, status: { in: ['submitted', 'ongoing'] } },
+      data: { status: 'completed', completedAt: new Date() },
+    });
     await prisma.contentEvent.create({
       data: {
         contentItemId: params.id,

@@ -121,6 +121,7 @@ async function processItem(itemId: string): Promise<void> {
         tags: item.tags,
         categoryId: item.categoryId,
         defaultLanguage: item.defaultLanguage,
+        recordingCountry: item.recordingCountry,
         madeForKids: item.madeForKids,
         publishAt: effectivePublishAt,
         isShort: item.type === 'short',
@@ -140,6 +141,7 @@ async function processItem(itemId: string): Promise<void> {
         tags: item.tags,
         categoryId: item.categoryId,
         defaultLanguage: item.defaultLanguage,
+        recordingCountry: item.recordingCountry,
         madeForKids: item.madeForKids,
         isShort: item.type === 'short',
       });

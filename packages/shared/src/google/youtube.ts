@@ -11,10 +11,11 @@ export interface UploadOptions {
   description: string;
   tags: string[];
   categoryId: string;           // e.g. "27" Education
-  defaultLanguage: string;      // e.g. "en"
+  defaultLanguage: string;      // e.g. "en-US"
+  recordingCountry?: string;    // ISO 3166-1 alpha-2, e.g. "US"
   madeForKids: boolean;
-  publishAt: Date;              // scheduled publish time (UTC)
-  isShort: boolean;             // adds #Shorts to description if not present
+  publishAt: Date;
+  isShort: boolean;
 }
 
 export interface UploadResult {
@@ -42,11 +43,11 @@ export async function uploadAndSchedule(opts: UploadOptions): Promise<UploadResu
   }
 
   const insertRes = await yt.videos.insert({
-    part: ['snippet', 'status'],
+    part: ['snippet', 'status', 'recordingDetails'],
     notifySubscribers: true,
     requestBody: {
       snippet: {
-        title: opts.title.slice(0, 100), // YouTube hard cap
+        title: opts.title.slice(0, 100),
         description,
         tags: opts.tags,
         categoryId: opts.categoryId,
@@ -58,6 +59,9 @@ export async function uploadAndSchedule(opts: UploadOptions): Promise<UploadResu
         publishAt: opts.publishAt.toISOString(),
         selfDeclaredMadeForKids: opts.madeForKids,
       },
+      recordingDetails: opts.recordingCountry
+        ? { locationDescription: opts.recordingCountry }
+        : undefined,
     },
     media: {
       mimeType: mimeForExt(opts.videoFilePath),

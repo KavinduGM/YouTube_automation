@@ -59,6 +59,8 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
   const Slot = z.object({
     channelId: z.string(),
     type: z.enum(['long', 'short', 'post']),
+    format: z.enum(['question', 'animation']).nullable().optional(),
+    name: z.string().max(80).nullable().optional(),
     scheduledAt: z.coerce.date(),
   });
 
@@ -137,6 +139,8 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
     const body = z.object({
       scheduledAt: z.coerce.date().optional(),
       type: z.enum(['long', 'short', 'post']).optional(),
+      format: z.enum(['question', 'animation']).nullable().optional(),
+      name: z.string().max(80).nullable().optional(),
       status: z.enum(['available', 'assigned', 'used', 'skipped']).optional(),
     }).parse(req.body);
     const slot = await prisma.publishSlot.update({
