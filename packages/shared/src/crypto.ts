@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { env } from './env.js';
 
 // AES-256-GCM. Key is 32 bytes (hex in env). Nonce is 12 bytes random per encrypt.
@@ -33,4 +34,17 @@ export function sha256Hex(s: string): string {
 
 export function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString('base64url');
+}
+
+// ───── Password hashing (bcrypt) ─────
+
+const BCRYPT_ROUNDS = 12;
+
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, BCRYPT_ROUNDS);
+}
+
+export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
+  if (!hash) return false;
+  return bcrypt.compare(plain, hash);
 }

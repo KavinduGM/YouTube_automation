@@ -29,7 +29,7 @@ export const oauthRoutes: FastifyPluginAsync = async (app) => {
     const url = buildAuthUrl({
       kind: q.kind,
       channelId: q.channelId,
-      loginEmail: req.user?.email,
+      loginEmail: req.user?.email ?? undefined,
     });
     return reply.redirect(url);
   });

@@ -1,16 +1,17 @@
 import { prisma, logger } from '@yt/shared';
 import { moveFile } from '@yt/shared/google/drive';
 
-// Move the item's video + thumbnail to the channel's published folder
-// (if configured). Best-effort: failures are logged warnings, not errors.
-// Idempotent — calling repeatedly is safe; files already in target are skipped.
+// Move the item's video + thumbnail to the published folder. Uses the
+// ChannelMonth for the item's scheduledPublishAt month if one is
+// configured, falling back to the channel-level publishedFolderId.
 export async function moveToPublishedFolder(itemId: string): Promise<void> {
   const item = await prisma.contentItem.findUnique({
     where: { id: itemId },
-    include: { channel: true },
+    include: { channel: { include: { months: true } } },
   });
   if (!item) return;
-  const target = item.channel.publishedFolderId;
+
+  const target = pickPublishedFolder(item);
   if (!target) return;
 
   const moved: string[] = [];
@@ -40,4 +41,17 @@ export async function moveToPublishedFolder(itemId: string): Promise<void> {
       },
     });
   }
+}
+
+function pickPublishedFolder(item: {
+  scheduledPublishAt: Date;
+  channel: { publishedFolderId: string | null; months: { month: string; publishedFolderId: string | null }[] };
+}): string | null {
+  const monthKey = monthString(item.scheduledPublishAt);
+  const cm = item.channel.months.find((m) => m.month === monthKey);
+  return cm?.publishedFolderId ?? item.channel.publishedFolderId ?? null;
+}
+
+function monthString(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }

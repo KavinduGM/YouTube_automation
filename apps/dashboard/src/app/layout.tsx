@@ -29,11 +29,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link href="/users">Users</Link>
               </>
             )}
+            {isAdmin && (
+              <Link href="/channel-months">Months</Link>
+            )}
             {isEditor && (
               <Link href="/editor/tasks">My tasks</Link>
             )}
             <span className="spacer" />
-            <span className="muted">{user.email} <small>({user.role})</small></span>
+            <span className="muted">{user.username} <small>({user.role})</small></span>
             <form action="/api/auth/logout" method="post" style={{ display: 'inline' }}>
               <button className="btn small secondary" type="submit">Sign out</button>
             </form>

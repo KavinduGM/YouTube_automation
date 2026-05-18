@@ -44,7 +44,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
 }
 
 export async function getMe(): Promise<{
-  user?: { id: string; email: string; name: string | null; role: 'admin' | 'editor' };
+  user?: { id: string; username: string; email: string | null; name: string | null; role: 'admin' | 'editor' };
 } | null> {
   const res = await fetchAPI('/auth/me');
   if (res.status === 401) return null;

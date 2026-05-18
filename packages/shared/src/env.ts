@@ -11,10 +11,17 @@ const Schema = z.object({
   DATABASE_URL: z.string().min(1),
 
   SESSION_SECRET: z.string().min(32),
+  // Emails that get overdue / failure notifications. Login is by
+  // username + password only — this list does not gate sign-in.
   ALLOWED_APPROVER_EMAILS: z
     .string()
-    .min(1)
+    .default('')
     .transform((s) => s.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)),
+
+  // Bootstrap admin credentials. Created on first startup if no admin exists.
+  BOOTSTRAP_ADMIN_USERNAME: z.string().default('ADMIN2026'),
+  BOOTSTRAP_ADMIN_PASSWORD: z.string().default('Admin26GM@#'),
+  BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
 
   TOKEN_ENCRYPTION_KEY: z
     .string()

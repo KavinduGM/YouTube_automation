@@ -1,20 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import {
-  prisma,
-  env,
-  randomToken,
-  sha256Hex,
-  sendEmail,
-  editorInviteEmail,
-  magicLinkEmail,
-} from '@yt/shared';
+import { prisma, hashPassword } from '@yt/shared';
 
-// Admin user-management.
-//   POST /users         invite a new user (defaults role=editor)
-//   GET  /users         list all
-//   PATCH /users/:id    update role / active
-//   POST /users/:id/resend-invite
+// Admin user management. Username/password auth — admin creates the
+// editor's credentials once, then hands them over.
+//   GET  /users                    list
+//   POST /users                    create with { username, password, role, email?, name? }
+//   PATCH /users/:id               update name / email / role / active
+//   POST  /users/:id/set-password  admin overrides a user's password
+//   DELETE /users/:id              remove
 
 export const userRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', app.requireAdmin);
@@ -23,6 +17,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     const users = await prisma.user.findMany({
       select: {
         id: true,
+        username: true,
         email: true,
         name: true,
         role: true,
@@ -36,37 +31,36 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/', async (req, reply) => {
     const body = z.object({
-      email: z.string().email(),
+      username: z.string().min(3).max(64).regex(/^[A-Za-z0-9_.-]+$/, 'username may contain letters, digits, . _ -'),
+      password: z.string().min(8).max(200),
+      email: z.string().email().optional(),
       name: z.string().optional(),
       role: z.enum(['admin', 'editor']).default('editor'),
     }).parse(req.body);
-    const email = body.email.toLowerCase();
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findFirst({
+      where: { OR: [{ username: body.username }, body.email ? { email: body.email } : { id: '__never__' }] },
+    });
     if (existing) {
       return reply.code(409).send({
         error: 'exists',
-        message: `User with email ${email} already exists.`,
+        message: existing.username === body.username
+          ? `Username "${body.username}" is already taken.`
+          : `Email "${body.email}" is already used by another account.`,
       });
     }
 
+    const passwordHash = await hashPassword(body.password);
     const user = await prisma.user.create({
-      data: { email, name: body.name, role: body.role },
-    });
-
-    // Issue a magic link so they can sign in.
-    const token = randomToken(32);
-    await prisma.magicLink.create({
       data: {
-        userId: user.id,
-        tokenHash: sha256Hex(token),
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        username: body.username,
+        email: body.email,
+        name: body.name,
+        role: body.role,
+        passwordHash,
       },
+      select: { id: true, username: true, email: true, name: true, role: true, active: true },
     });
-    const link = `${env().DASHBOARD_URL}/auth/verify?token=${encodeURIComponent(token)}`;
-    const tpl = body.role === 'editor' ? editorInviteEmail({ loginUrl: link }) : magicLinkEmail(link);
-    await sendEmail({ to: email, ...tpl });
-
     return { user };
   });
 
@@ -74,6 +68,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.string() }).parse(req.params);
     const body = z.object({
       name: z.string().nullable().optional(),
+      email: z.string().email().nullable().optional(),
       role: z.enum(['admin', 'editor']).optional(),
       active: z.boolean().optional(),
     }).parse(req.body);
@@ -83,25 +78,25 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     const user = await prisma.user.update({
       where: { id: params.id },
       data: body,
-      select: { id: true, email: true, name: true, role: true, active: true },
+      select: { id: true, username: true, email: true, name: true, role: true, active: true },
     });
     return { user };
   });
 
-  app.post('/:id/resend-invite', async (req) => {
+  app.post('/:id/set-password', async (req, reply) => {
     const params = z.object({ id: z.string() }).parse(req.params);
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: params.id } });
-    const token = randomToken(32);
-    await prisma.magicLink.create({
-      data: {
-        userId: user.id,
-        tokenHash: sha256Hex(token),
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      },
-    });
-    const link = `${env().DASHBOARD_URL}/auth/verify?token=${encodeURIComponent(token)}`;
-    const tpl = user.role === 'editor' ? editorInviteEmail({ loginUrl: link }) : magicLinkEmail(link);
-    await sendEmail({ to: user.email, ...tpl });
+    const body = z.object({ newPassword: z.string().min(8).max(200) }).parse(req.body);
+    const passwordHash = await hashPassword(body.newPassword);
+    await prisma.user.update({ where: { id: params.id }, data: { passwordHash } });
+    return { ok: true };
+  });
+
+  app.delete('/:id', async (req, reply) => {
+    const params = z.object({ id: z.string() }).parse(req.params);
+    if (params.id === req.user!.id) {
+      return reply.code(400).send({ error: 'cant_delete_self' });
+    }
+    await prisma.user.delete({ where: { id: params.id } });
     return { ok: true };
   });
 };

@@ -137,7 +137,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
         data: { status: 'planned', driveFileId: null, driveThumbId: null },
       });
     }
-    if (task.assignedEditor) {
+    if (task.assignedEditor?.email) {
       const e = env();
       const tpl = editorRevisionEmail({
         channel: task.channel.name,

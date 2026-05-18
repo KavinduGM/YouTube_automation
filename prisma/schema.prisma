@@ -43,6 +43,30 @@ model Channel {
   contentItems        ContentItem[]
   publishSlots        PublishSlot[]
   editorTasks         EditorTask[]
+  months              ChannelMonth[]
+}
+
+// ───────── Per-month channel folders ─────────
+// One row per (channel, month). Lets the admin manage Drive folders +
+// sheets month-by-month without hand-editing channel settings each cycle.
+// The raw-watcher iterates every active ChannelMonth, so May raws land in
+// May slots and June raws land in June slots automatically.
+model ChannelMonth {
+  id                  String      @id @default(cuid())
+  channelId           String
+  channel             Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  month               String      // "YYYY-MM" — what month this folder is for
+
+  driveFolderId       String?     // working folder where raws + finals land
+  publishedFolderId   String?     // finals moved here after YouTube publish
+  rawArchiveFolderId  String?     // raws moved here after editor submits
+  defaultSheetId      String?     // sheet for write-back this month
+
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@unique([channelId, month])
+  @@index([channelId])
 }
 
 // ───────── Google service connection (for Drive + Sheets) ─────────
@@ -234,26 +258,19 @@ enum UserRole {
 
 model User {
   id              String      @id @default(cuid())
-  email           String      @unique
+  // Username is the login identifier. Email is optional, kept for notifications.
+  username        String      @unique
+  email           String?     @unique
+  passwordHash    String
   name            String?
   role            UserRole    @default(admin)
   active          Boolean     @default(true)
   createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   approvedItems   ContentItem[]
   assignedTasks   EditorTask[]
   sessions        Session[]
-  magicLinks      MagicLink[]
-}
-
-model MagicLink {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash   String    @unique
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
 }
 
 model Session {

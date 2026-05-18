@@ -11,6 +11,8 @@ import { userRoutes } from './routes/users.js';
 import { slotRoutes } from './routes/slots.js';
 import { taskRoutes } from './routes/tasks.js';
 import { authPlugin } from './plugins/auth.js';
+import { bootstrapAdmin } from './bootstrap.js';
+import { channelMonthRoutes } from './routes/channelMonths.js';
 
 async function build() {
   const e = env();
@@ -53,6 +55,7 @@ async function build() {
   await app.register(userRoutes, { prefix: '/users' });
   await app.register(slotRoutes, { prefix: '/slots' });
   await app.register(taskRoutes, { prefix: '/tasks' });
+  await app.register(channelMonthRoutes, { prefix: '/channel-months' });
 
   return app;
 }
@@ -60,6 +63,9 @@ async function build() {
 build()
   .then(async (app) => {
     const e = env();
+    await bootstrapAdmin().catch((err) =>
+      logger.error({ err }, 'bootstrap admin failed (continuing)'),
+    );
     await app.listen({ port: e.API_PORT, host: '0.0.0.0' });
     logger.info({ port: e.API_PORT }, 'api listening');
   })

@@ -4,7 +4,8 @@ import UsersClient from './UsersClient';
 
 interface User {
   id: string;
-  email: string;
+  username: string;
+  email: string | null;
   name: string | null;
   role: 'admin' | 'editor';
   active: boolean;

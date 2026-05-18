@@ -4,7 +4,7 @@ import { prisma, sha256Hex } from '@yt/shared';
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: { id: string; email: string; role: 'admin' | 'editor' };
+    user?: { id: string; username: string; email: string | null; role: 'admin' | 'editor' };
   }
   interface FastifyInstance {
     requireAuth: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -36,6 +36,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     if (!session.user.active) return;
     req.user = {
       id: session.user.id,
+      username: session.user.username,
       email: session.user.email,
       role: session.user.role as 'admin' | 'editor',
     };
