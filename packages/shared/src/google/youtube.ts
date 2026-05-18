@@ -128,6 +128,25 @@ export async function getVideoStatus(channelId: string, videoId: string): Promis
   };
 }
 
+// Set (or replace) the custom thumbnail on a video that's already uploaded.
+// Use for the case where the thumbnail file appears in Drive AFTER the
+// video was already pushed to YouTube.
+export async function setThumbnail(opts: {
+  channelId: string;
+  videoId: string;
+  thumbnailFilePath: string;
+}): Promise<void> {
+  const auth = await clientForChannel(opts.channelId);
+  const yt = google.youtube({ version: 'v3', auth });
+  await yt.thumbnails.set({
+    videoId: opts.videoId,
+    media: {
+      mimeType: mimeForExt(opts.thumbnailFilePath),
+      body: createReadStream(opts.thumbnailFilePath),
+    },
+  });
+}
+
 // Delete a video from YouTube. Works for scheduled (private) and live videos.
 // Returns true if deleted, false if YouTube reports it doesn't exist (already gone).
 export async function deleteVideo(channelId: string, videoId: string): Promise<boolean> {

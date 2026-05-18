@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { mkdir, unlink } from 'node:fs/promises';
 import {
   prisma,
   logger,
@@ -8,7 +10,8 @@ import {
   sendEmail,
   pendingApprovalEmail,
 } from '@yt/shared';
-import { walkFolder } from '@yt/shared/google/drive';
+import { walkFolder, downloadFile } from '@yt/shared/google/drive';
+import { setThumbnail } from '@yt/shared/google/youtube';
 
 // Walks each channel's Drive folder, finds files matching the naming convention,
 // pairs videos with thumbnails, and matches them to ContentItems.
@@ -99,6 +102,13 @@ async function processChannelFolder(channelId: string, folderId: string): Promis
       updateData.uploadedAt = new Date();
     }
 
+    // Detect a NEW thumbnail arriving for an item already on YouTube.
+    const newThumbForExisting =
+      pair.thumb &&
+      item.youtubeVideoId &&
+      item.driveThumbId !== pair.thumb.id &&
+      ['scheduled', 'published'].includes(item.status);
+
     const updated = await prisma.contentItem.update({
       where: { id: item.id },
       data: updateData,
@@ -117,6 +127,50 @@ async function processChannelFolder(channelId: string, folderId: string): Promis
         logger.error({ err, itemId: updated.id }, 'failed to send pending approval email'),
       );
     }
+
+    // Push the thumbnail to YouTube post-upload, if newly arrived.
+    if (newThumbForExisting && pair.thumb) {
+      await pushThumbnailToYouTube(item.id, item.channelId, item.youtubeVideoId!, pair.thumb.id, pair.thumb.ext)
+        .catch((err) => logger.error({ err, itemId: item.id }, 'late thumbnail upload failed'));
+    }
+  }
+}
+
+async function pushThumbnailToYouTube(
+  itemId: string,
+  channelId: string,
+  youtubeVideoId: string,
+  thumbDriveFileId: string,
+  ext: string,
+): Promise<void> {
+  const e = env();
+  await mkdir(e.TMP_DIR, { recursive: true });
+  const localPath = join(e.TMP_DIR, `${itemId}-late-thumb.${ext}`);
+  try {
+    await downloadFile(thumbDriveFileId, localPath);
+    await setThumbnail({ channelId, videoId: youtubeVideoId, thumbnailFilePath: localPath });
+    await prisma.contentItem.update({
+      where: { id: itemId },
+      data: { lastError: null }, // clear any previous "thumbnail failed" note
+    });
+    await prisma.contentEvent.create({
+      data: {
+        contentItemId: itemId,
+        type: 'thumbnail_set',
+        message: `Custom thumbnail pushed to YouTube post-upload`,
+        meta: { videoId: youtubeVideoId, driveFileId: thumbDriveFileId },
+      },
+    });
+    logger.info({ itemId, youtubeVideoId }, 'late thumbnail set on YouTube');
+  } catch (err) {
+    const msg = (err as Error).message ?? String(err);
+    await prisma.contentItem.update({
+      where: { id: itemId },
+      data: { lastError: `Thumbnail upload failed (post-publish): ${msg}` },
+    }).catch(() => {});
+    throw err;
+  } finally {
+    await unlink(localPath).catch(() => {});
   }
 }
 

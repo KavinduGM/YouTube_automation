@@ -11,6 +11,7 @@ import { downloadFile } from '@yt/shared/google/drive';
 import { uploadAndSchedule } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
 import { moveToPublishedFolder } from './move-to-published.js';
+import { moveRawToArchive } from './move-raw-to-archive.js';
 
 const MAX_ATTEMPTS = 3;
 
@@ -176,6 +177,10 @@ async function processItem(itemId: string): Promise<void> {
     // Best-effort — failure here doesn't undo the YouTube upload.
     await moveToPublishedFolder(item.id).catch((err) =>
       logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)'),
+    );
+    // Also archive the raw video + any docs so the working folder stays clean.
+    await moveRawToArchive(item.id).catch((err) =>
+      logger.warn({ err, itemId: item.id }, 'move-raw-to-archive failed (non-fatal)'),
     );
 
     // Sheet write-back (best effort)

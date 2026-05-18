@@ -2,6 +2,7 @@ import { prisma, logger } from '@yt/shared';
 import { getVideoStatus } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
 import { moveToPublishedFolder } from './move-to-published.js';
+import { moveRawToArchive } from './move-raw-to-archive.js';
 
 // Confirms that 'scheduled' items have actually flipped to public/published on YouTube.
 // Runs every 10 minutes; only checks items whose scheduledPublishAt is in the past.
@@ -41,6 +42,8 @@ export async function runPublishConfirmerOnce(): Promise<void> {
         // Move to published folder (idempotent — runs even if scheduler
         // already tried but failed, e.g. before Drive scope was upgraded).
         await moveToPublishedFolder(item.id).catch(() => {});
+        // Also retry the raw archive move.
+        await moveRawToArchive(item.id).catch(() => {});
 
         // Sheet write-back — flip status to 'published' and stamp published_at.
         if (item.sheetId) {
@@ -80,5 +83,6 @@ export async function runPublishConfirmerOnce(): Promise<void> {
   });
   for (const o of orphans) {
     await moveToPublishedFolder(o.id).catch(() => {});
+    await moveRawToArchive(o.id).catch(() => {});
   }
 }
