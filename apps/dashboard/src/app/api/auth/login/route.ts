@@ -9,8 +9,13 @@ export async function POST(req: NextRequest) {
     headers: { 'content-type': 'application/json' },
     body,
   });
-  return new NextResponse(await upstream.text(), {
+  const res = new NextResponse(await upstream.text(), {
     status: upstream.status,
     headers: { 'content-type': 'application/json' },
   });
+  // Forward the session Set-Cookie back to the browser — without this,
+  // the cookie never gets stored and the user is bounced back to /login.
+  const setCookie = upstream.headers.get('set-cookie');
+  if (setCookie) res.headers.set('set-cookie', setCookie);
+  return res;
 }
