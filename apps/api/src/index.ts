@@ -13,6 +13,7 @@ import { taskRoutes } from './routes/tasks.js';
 import { authPlugin } from './plugins/auth.js';
 import { bootstrapAdmin } from './bootstrap.js';
 import { channelMonthRoutes } from './routes/channelMonths.js';
+import { statsRoutes } from './routes/stats.js';
 
 async function build() {
   const e = env();
@@ -56,6 +57,7 @@ async function build() {
   await app.register(slotRoutes, { prefix: '/slots' });
   await app.register(taskRoutes, { prefix: '/tasks' });
   await app.register(channelMonthRoutes, { prefix: '/channel-months' });
+  await app.register(statsRoutes, { prefix: '/stats' });
 
   return app;
 }

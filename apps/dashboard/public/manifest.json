@@ -1,0 +1,31 @@
+{
+  "name": "YT Automation",
+  "short_name": "YT Auto",
+  "description": "Approve and schedule YouTube content across channels",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "categories": ["productivity", "business"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Inbox", "short_name": "Inbox", "url": "/inbox" },
+    { "name": "Dashboard", "short_name": "Dashboard", "url": "/dashboard" },
+    { "name": "My tasks", "short_name": "Tasks", "url": "/editor/tasks" }
+  ]
+}
