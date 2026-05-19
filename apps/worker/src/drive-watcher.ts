@@ -50,16 +50,15 @@ async function processChannelFolder(channelId: string, folderId: string): Promis
   const byBase = new Map<string, Pair>();
 
   for (const f of files) {
-    // Match the final-filename pattern; pair its base name with any image
-    // sharing the base. (Images alone won't parse, so try a soft match.)
     const parsed = parseFinalFilename(f.name);
     if (parsed) {
       const slot = byBase.get(parsed.baseName) ?? {};
       if (isVideo(parsed.ext)) slot.video = { id: f.id, name: f.name, ext: parsed.ext };
+      else if (isImage(parsed.ext)) slot.thumb = { id: f.id, name: f.name, ext: parsed.ext };
       byBase.set(parsed.baseName, slot);
       continue;
     }
-    // Thumbnail: same base name as a final video, image extension
+    // Fallback: thumbnail with a non-conforming base name but same prefix.
     const m = /^(.+)\.([A-Za-z0-9]+)$/.exec(f.name);
     if (!m) continue;
     const [, base, ext] = m;
