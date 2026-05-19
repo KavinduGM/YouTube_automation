@@ -34,8 +34,8 @@ const Schema = z.object({
   RESEND_API_KEY: z.string().min(1),
   RESEND_FROM: z.string().min(1),
 
-  DRIVE_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(30).default(120),
-  SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(60),
+  DRIVE_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(30),
+  SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(10).default(20),
   TMP_DIR: z.string().default('./tmp'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

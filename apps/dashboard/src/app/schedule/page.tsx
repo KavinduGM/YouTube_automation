@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import ScheduleClient from './ScheduleClient';
+import AutoRefresh from '@/components/AutoRefresh';
 
 interface Channel {
   id: string; slug: string; name: string; filenamePrefix: string | null;
@@ -40,6 +41,7 @@ export default async function SchedulePage({
   }
   return (
     <>
+      <AutoRefresh intervalSeconds={30} />
       <h1>Schedule</h1>
       <p className="muted">Pre-fill publishing slots. As raw videos arrive, the next matching-format slot in the right month is consumed.</p>
       <ScheduleClient channels={channels} initialSlots={slots} channelId={channelId} month={month} />

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import TasksClient from './TasksClient';
+import AutoRefresh from '@/components/AutoRefresh';
 
 interface Task {
   id: string;
@@ -32,6 +33,7 @@ export default async function TasksPage({
   const data = await apiGet<{ tasks: Task[] }>(`/tasks?${qs.toString()}`);
   return (
     <>
+      <AutoRefresh intervalSeconds={30} />
       <h1>Editor tasks</h1>
       <p className="muted">All raw uploads and their editing status.</p>
       <TasksClient initialTasks={data.tasks} initialStatus={searchParams.status ?? ''} />

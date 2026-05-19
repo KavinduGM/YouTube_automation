@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
+import AutoRefresh from '@/components/AutoRefresh';
 
 interface InboxItem {
   id: string;
@@ -20,6 +21,7 @@ export default async function InboxPage() {
   const data = await apiGet<{ items: InboxItem[] }>('/items/inbox');
   return (
     <>
+      <AutoRefresh intervalSeconds={30} />
       <h1>Inbox <span className="muted">— pending approval</span></h1>
       {data.items.length === 0 ? (
         <div className="card"><p className="muted">Nothing waiting. New uploads appear here automatically once the watcher picks them up.</p></div>

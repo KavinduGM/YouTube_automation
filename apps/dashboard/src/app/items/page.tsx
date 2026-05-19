@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import { fmtDateTime, statusBadge } from '@/lib/format';
+import AutoRefresh from '@/components/AutoRefresh';
 
 interface Item {
   id: string;
@@ -37,6 +38,7 @@ export default async function ItemsPage({
 
   return (
     <>
+      <AutoRefresh intervalSeconds={30} />
       <h1>Items <span className="muted">({data.total})</span></h1>
       <div className="card">
         <form method="get" className="row">

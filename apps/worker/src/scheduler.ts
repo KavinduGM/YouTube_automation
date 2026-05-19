@@ -7,7 +7,7 @@ import {
   sendEmail,
   failureEmail,
 } from '@yt/shared';
-import { downloadFile } from '@yt/shared/google/drive';
+import { downloadFile, getFileMeta } from '@yt/shared/google/drive';
 import { uploadAndSchedule } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
 import { moveToPublishedFolder } from './move-to-published.js';
@@ -97,7 +97,23 @@ async function processItem(itemId: string): Promise<void> {
   await mkdir(e.TMP_DIR, { recursive: true });
   const ext = item.expectedFilename.split('.').pop() ?? 'mp4';
   const localVideo = join(e.TMP_DIR, `${item.id}.${ext}`);
-  const localThumb = item.driveThumbId ? join(e.TMP_DIR, `${item.id}.thumb`) : undefined;
+
+  // Resolve the thumbnail's real extension from Drive metadata. Saving
+  // it locally as ".thumb" made mimeForExt return application/octet-stream
+  // and YouTube rejected the upload silently — the thumbnail simply
+  // never got set.
+  let localThumb: string | undefined;
+  if (item.driveThumbId) {
+    let thumbExt = 'jpg';
+    try {
+      const meta = await getFileMeta(item.driveThumbId);
+      const m = meta?.name ? /\.([A-Za-z0-9]+)$/.exec(meta.name) : null;
+      if (m?.[1]) thumbExt = m[1].toLowerCase();
+    } catch (err) {
+      logger.warn({ err, fileId: item.driveThumbId }, 'thumb meta fetch failed, defaulting to .jpg');
+    }
+    localThumb = join(e.TMP_DIR, `${item.id}-thumb.${thumbExt}`);
+  }
 
   try {
     await downloadFile(item.driveFileId, localVideo);

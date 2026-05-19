@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { apiGet, getMe } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
+import AutoRefresh from '@/components/AutoRefresh';
 
 interface Task {
   id: string;
@@ -82,6 +83,7 @@ export default async function EditorTasksPage() {
 
   return (
     <>
+      <AutoRefresh intervalSeconds={30} />
       <h1>My tasks</h1>
       <p className="muted">Edit the raw video in Drive and save the final with the filename shown. The thumbnail must share the same base name (e.g. <code>FINALNAME.jpg</code>).</p>
       <Section title="Pending" badge={badges.pending} tasks={grouped.pending} />

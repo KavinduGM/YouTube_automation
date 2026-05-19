@@ -61,7 +61,7 @@ export default function ScheduleClient({
   const currentChannel = channels.find((c) => c.id === initialChannelId);
 
   // Bulk-add
-  const [bulkType, setBulkType] = useState<'long' | 'short'>('short');
+  const [bulkType, setBulkType] = useState<'long' | 'short'>('long');
   const [bulkFormat, setBulkFormat] = useState<'question' | 'animation' | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -203,8 +203,8 @@ export default function ScheduleClient({
           <div>
             <label>Type</label>
             <select value={bulkType} onChange={(e) => { setBulkType(e.target.value as 'long' | 'short'); if (e.target.value === 'short') setBulkFormat(''); }}>
-              <option value="short">short</option>
               {(currentChannel?.hasQuestionVideos || currentChannel?.hasAnimationVideos) && <option value="long">long</option>}
+              <option value="short">short</option>
             </select>
           </div>
           {bulkType === 'long' && (
