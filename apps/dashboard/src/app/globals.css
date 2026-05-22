@@ -265,12 +265,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
   }
   body { font-size: 15px; }
 
-  /* Sidebar becomes a slide-out drawer */
+  /* Sidebar becomes a slide-out drawer. z-index MUST be higher than
+     the backdrop, otherwise the backdrop overlay eats clicks on nav. */
   .sidebar {
     transform: translateX(-100%);
     transition: transform 0.22s ease;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
     padding-top: 64px;
+    z-index: 100;
   }
   body.sidebar-open .sidebar {
     transform: translateX(0);
@@ -281,6 +283,9 @@ hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
     background: rgba(0, 0, 0, 0.35);
     z-index: 90;
   }
+  /* Slightly bigger nav links on mobile so the drawer is easy to tap */
+  .sidebar a.nav-link { padding: 12px 14px; font-size: 15px; }
+  .sidebar .nav-section { padding: 14px 14px 6px; }
 
   .main { margin-left: 0; padding: 72px 16px 40px; }
 
