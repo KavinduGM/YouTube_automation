@@ -39,6 +39,11 @@ const Schema = z.object({
   TMP_DIR: z.string().default('./tmp'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // Bearer token for service-to-service calls from the Content Automation
+  // system. When set, enables the /automation/* routes. When unset, those
+  // routes return 503 — leave it blank if you don't use that integration.
+  AUTOMATION_BEARER: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof Schema>;

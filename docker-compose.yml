@@ -68,6 +68,7 @@ services:
       SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS}
       TMP_DIR: ${TMP_DIR}
       LOG_LEVEL: ${LOG_LEVEL}
+      AUTOMATION_BEARER: ${AUTOMATION_BEARER:-}
     networks: [dokploy-network, default]
     expose:
       - "4000"
