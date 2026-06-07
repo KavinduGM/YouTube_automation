@@ -35,7 +35,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
       password: z.string().min(8).max(200),
       email: z.string().email().optional(),
       name: z.string().optional(),
-      role: z.enum(['admin', 'editor']).default('editor'),
+      role: z.enum(['admin', 'manager', 'editor']).default('editor'),
     }).parse(req.body);
 
     const existing = await prisma.user.findFirst({
@@ -69,7 +69,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     const body = z.object({
       name: z.string().nullable().optional(),
       email: z.string().email().nullable().optional(),
-      role: z.enum(['admin', 'editor']).optional(),
+      role: z.enum(['admin', 'manager', 'editor']).optional(),
       active: z.boolean().optional(),
     }).parse(req.body);
     if (params.id === req.user!.id && body.active === false) {

@@ -41,6 +41,7 @@ function shape(c: import('@prisma/client').Channel) {
     rawArchiveFolderId: c.rawArchiveFolderId,
     defaultSheetId: c.defaultSheetId,
     connected: Boolean(c.refreshTokenEnc),
+    youtubeConnectedAt: c.youtubeConnectedAt ? c.youtubeConnectedAt.toISOString() : null,
   };
 }
 
@@ -52,7 +53,9 @@ export const channelRoutes: FastifyPluginAsync = async (app) => {
     const driveSheets = await prisma.googleConnection.findFirst();
     return {
       channels: channels.map(shape),
-      driveSheets: driveSheets ? { email: driveSheets.email } : null,
+      driveSheets: driveSheets
+        ? { email: driveSheets.email, connectedAt: driveSheets.updatedAt.toISOString() }
+        : null,
     };
   });
 

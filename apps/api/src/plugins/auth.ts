@@ -2,13 +2,17 @@ import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma, sha256Hex } from '@yt/shared';
 
+export type AppRole = 'admin' | 'manager' | 'editor';
+
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: { id: string; username: string; email: string | null; role: 'admin' | 'editor' };
+    user?: { id: string; username: string; email: string | null; role: AppRole };
   }
   interface FastifyInstance {
     requireAuth: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    // admin OR manager — used for review/approval and read-only views of schedule
+    requireApprover: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -38,7 +42,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       id: session.user.id,
       username: session.user.username ?? '',
       email: session.user.email,
-      role: session.user.role as 'admin' | 'editor',
+      role: session.user.role as AppRole,
     };
 
     // Sliding renewal: if the cookie is being used and is more than
@@ -76,6 +80,16 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
     if (req.user.role !== 'admin') {
       reply.code(403).send({ error: 'forbidden', message: 'admin only' });
+    }
+  });
+
+  app.decorate('requireApprover', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.user) {
+      reply.code(401).send({ error: 'unauthorized' });
+      return;
+    }
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      reply.code(403).send({ error: 'forbidden', message: 'admin or manager only' });
     }
   });
 };

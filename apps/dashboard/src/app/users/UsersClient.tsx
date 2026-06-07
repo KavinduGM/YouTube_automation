@@ -7,7 +7,7 @@ interface User {
   username: string;
   email: string | null;
   name: string | null;
-  role: 'admin' | 'editor';
+  role: 'admin' | 'manager' | 'editor';
   active: boolean;
   createdAt: string;
 }
@@ -19,7 +19,7 @@ export default function UsersClient({ initialUsers, myId }: { initialUsers: User
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'admin' | 'editor'>('editor');
+  const [role, setRole] = useState<'admin' | 'manager' | 'editor'>('editor');
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export default function UsersClient({ initialUsers, myId }: { initialUsers: User
     finally { setBusy(null); }
   }
 
-  async function setRoleFor(u: User, newRole: 'admin' | 'editor') {
+  async function setRoleFor(u: User, newRole: 'admin' | 'manager' | 'editor') {
     setBusy(u.id); setErr(null);
     try {
       const res = await fetch(`/api/proxy/users/${u.id}`, {
@@ -126,8 +126,9 @@ export default function UsersClient({ initialUsers, myId }: { initialUsers: User
           </div>
           <div>
             <label>Role</label>
-            <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'editor')}>
+            <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'manager' | 'editor')}>
               <option value="editor">editor</option>
+              <option value="manager">manager</option>
               <option value="admin">admin</option>
             </select>
           </div>
@@ -162,8 +163,9 @@ export default function UsersClient({ initialUsers, myId }: { initialUsers: User
               <td>{u.email ?? '—'}</td>
               <td>{u.name ?? '—'}</td>
               <td>
-                <select value={u.role} disabled={u.id === myId || !!busy} onChange={(e) => setRoleFor(u, e.target.value as 'admin' | 'editor')}>
+                <select value={u.role} disabled={u.id === myId || !!busy} onChange={(e) => setRoleFor(u, e.target.value as 'admin' | 'manager' | 'editor')}>
                   <option value="admin">admin</option>
+                  <option value="manager">manager</option>
                   <option value="editor">editor</option>
                 </select>
               </td>

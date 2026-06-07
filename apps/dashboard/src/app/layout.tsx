@@ -30,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const me = await getMe();
   const user = me?.user;
   const isAdmin = user?.role === 'admin';
+  const isManager = user?.role === 'manager';
   const isEditor = user?.role === 'editor';
 
   if (!user) {
@@ -63,6 +64,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link className="nav-link" href="/channels">Channels</Link>
                 <Link className="nav-link" href="/channel-months">Monthly folders</Link>
                 <Link className="nav-link" href="/users">Users</Link>
+              </>
+            )}
+            {isManager && (
+              <>
+                <div className="nav-section">Overview</div>
+                <Link className="nav-link" href="/dashboard">Dashboard</Link>
+                <div className="nav-section">Review</div>
+                <Link className="nav-link" href="/inbox">Inbox</Link>
+                <Link className="nav-link" href="/items">Items</Link>
+                <div className="nav-section">Operations</div>
+                <Link className="nav-link" href="/schedule">Schedule</Link>
               </>
             )}
             {isEditor && (

@@ -14,6 +14,22 @@ interface Channel {
   rawArchiveFolderId: string | null;
   defaultSheetId: string | null;
   connected: boolean;
+  youtubeConnectedAt: string | null;
+}
+
+// Refresh tokens for unverified Google OAuth apps in "Testing" mode expire
+// 7 days after they're issued. Surface that as a visible badge so the team
+// knows to reconnect before things silently break.
+function connectionBadge(connectedAt: string | null, connected: boolean): { label: string; color: 'green' | 'yellow' | 'red' | 'gray'; daysLeft: number | null } {
+  if (!connected || !connectedAt) {
+    return { label: 'Not connected', color: 'gray', daysLeft: null };
+  }
+  const ageMs = Date.now() - new Date(connectedAt).getTime();
+  const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+  const daysLeft = 7 - daysOld;
+  if (daysOld >= 7) return { label: 'Expired — reconnect', color: 'red', daysLeft: 0 };
+  if (daysOld >= 5) return { label: `Reconnect soon (${daysLeft}d left)`, color: 'yellow', daysLeft };
+  return { label: `Active (${daysLeft}d left)`, color: 'green', daysLeft };
 }
 
 function suggestPrefix(name: string): string {
@@ -30,7 +46,7 @@ function slugify(name: string): string {
 
 export default function ChannelsClient({
   initial,
-}: { initial: { channels: Channel[]; driveSheets: { email: string } | null } }) {
+}: { initial: { channels: Channel[]; driveSheets: { email: string; connectedAt: string } | null } }) {
   const router = useRouter();
   const [channels, setChannels] = useState(initial.channels);
   const driveSheets = initial.driveSheets;
@@ -124,7 +140,13 @@ export default function ChannelsClient({
       <div className="card">
         <div className="card-row">
           <div>
-            <h3 style={{ marginBottom: 4 }}>Google Drive + Sheets</h3>
+            <h3 style={{ marginBottom: 4 }}>
+              Google Drive + Sheets{' '}
+              {(() => {
+                const b = connectionBadge(driveSheets?.connectedAt ?? null, !!driveSheets);
+                return <span className={`badge ${b.color}`} style={{ marginLeft: 6 }}>{b.label}</span>;
+              })()}
+            </h3>
             <p className="muted" style={{ margin: 0 }}>
               {driveSheets ? <>Connected as <code>{driveSheets.email}</code></> : 'Not connected — required for Drive and Sheet access'}
             </p>
@@ -186,7 +208,9 @@ export default function ChannelsClient({
       {channels.length === 0 ? (
         <div className="card"><p className="muted">No channels yet — add one above.</p></div>
       ) : (
-        channels.map((c) => (
+        channels.map((c) => {
+          const ytBadge = connectionBadge(c.youtubeConnectedAt, c.connected);
+          return (
           <div key={c.id} className="card">
             <div className="card-row">
               <div>
@@ -194,7 +218,8 @@ export default function ChannelsClient({
                   {c.name} <span className="badge gray">{c.slug}</span>{' '}
                   {c.filenamePrefix
                     ? <span className="badge purple">{c.filenamePrefix}</span>
-                    : <span className="badge red">set prefix below</span>}
+                    : <span className="badge red">set prefix below</span>}{' '}
+                  <span className={`badge ${ytBadge.color}`}>{ytBadge.label}</span>
                 </h3>
                 <p className="muted" style={{ marginTop: 4 }}>
                   YouTube: {c.youtubeChannelId
@@ -245,7 +270,8 @@ export default function ChannelsClient({
               </label>
             </div>
           </div>
-        ))
+          );
+        })
       )}
       <p className="muted" style={{ marginTop: 8 }}>Drive folders are managed per month on <a href="/channel-months">Monthly folders</a>.</p>
     </>

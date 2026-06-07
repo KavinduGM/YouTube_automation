@@ -12,7 +12,15 @@ import { prisma } from '@yt/shared';
 //   GET    /slots/queue?channelId=&type=             next available (helper)
 
 export const slotRoutes: FastifyPluginAsync = async (app) => {
-  app.addHook('preHandler', app.requireAdmin);
+  // Read access: admin + manager (manager has a read-only schedule view).
+  // Write access: admin only — enforced inline per route below.
+  app.addHook('preHandler', app.requireApprover);
+
+  const requireAdmin = async (req: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) => {
+    if (req.user?.role !== 'admin') {
+      reply.code(403).send({ error: 'forbidden', message: 'admin only' });
+    }
+  };
 
   app.get('/', async (req) => {
     const q = z.object({
@@ -64,7 +72,7 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
     scheduledAt: z.coerce.date(),
   });
 
-  app.post('/', async (req, reply) => {
+  app.post('/', { preHandler: requireAdmin }, async (req, reply) => {
     const body = Slot.parse(req.body);
     try {
       const slot = await prisma.publishSlot.create({ data: body });
@@ -78,7 +86,7 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post('/bulk', async (req) => {
+  app.post('/bulk', { preHandler: requireAdmin }, async (req) => {
     const body = z.object({ slots: z.array(Slot).max(2000) }).parse(req.body);
     // Use createMany with skipDuplicates so re-runs don't error
     const res = await prisma.publishSlot.createMany({
@@ -90,7 +98,7 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
 
   // Duplicate a month's slot pattern into a target month (preserves
   // weekday + hour:minute, just shifts the date).
-  app.post('/duplicate', async (req) => {
+  app.post('/duplicate', { preHandler: requireAdmin }, async (req) => {
     const body = z.object({
       channelId: z.string(),
       sourceMonth: z.string().regex(/^\d{4}-\d{2}$/),
@@ -134,7 +142,7 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
     return { count: res.count, considered: sources.length };
   });
 
-  app.patch('/:id', async (req, reply) => {
+  app.patch('/:id', { preHandler: requireAdmin }, async (req, reply) => {
     const params = z.object({ id: z.string() }).parse(req.params);
     const body = z.object({
       scheduledAt: z.coerce.date().optional(),
@@ -150,7 +158,7 @@ export const slotRoutes: FastifyPluginAsync = async (app) => {
     return { slot };
   });
 
-  app.delete('/:id', async (req, reply) => {
+  app.delete('/:id', { preHandler: requireAdmin }, async (req, reply) => {
     const params = z.object({ id: z.string() }).parse(req.params);
     const existing = await prisma.publishSlot.findUnique({ where: { id: params.id } });
     if (!existing) return reply.code(404).send({ error: 'not_found' });

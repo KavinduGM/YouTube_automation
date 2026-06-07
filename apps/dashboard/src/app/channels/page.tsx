@@ -14,6 +14,7 @@ interface Channel {
   rawArchiveFolderId: string | null;
   defaultSheetId: string | null;
   connected: boolean;
+  youtubeConnectedAt: string | null;
 }
 
 export default async function ChannelsPage({
@@ -24,7 +25,7 @@ export default async function ChannelsPage({
   const me = await getMe();
   if (!me?.user) redirect('/login');
   if (me.user.role !== 'admin') redirect('/');
-  const data = await apiGet<{ channels: Channel[]; driveSheets: { email: string } | null }>('/channels');
+  const data = await apiGet<{ channels: Channel[]; driveSheets: { email: string; connectedAt: string } | null }>('/channels');
   return (
     <>
       <h1>Channels</h1>

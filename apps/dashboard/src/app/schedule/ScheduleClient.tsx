@@ -46,12 +46,13 @@ function badgeForStatus(s: string): string {
 }
 
 export default function ScheduleClient({
-  channels, initialSlots, channelId: initialChannelId, month: initialMonth,
+  channels, initialSlots, channelId: initialChannelId, month: initialMonth, readOnly = false,
 }: {
   channels: Channel[];
   initialSlots: Slot[];
   channelId?: string;
   month: string;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [slots, setSlots] = useState(initialSlots);
@@ -59,6 +60,11 @@ export default function ScheduleClient({
   const [err, setErr] = useState<string | null>(null);
 
   const currentChannel = channels.find((c) => c.id === initialChannelId);
+  const channelById = useMemo(() => {
+    const m = new Map<string, Channel>();
+    for (const c of channels) m.set(c.id, c);
+    return m;
+  }, [channels]);
 
   // Bulk-add
   const [bulkType, setBulkType] = useState<'long' | 'short'>('long');
@@ -189,14 +195,17 @@ export default function ScheduleClient({
             <label>Month</label>
             <input type="month" value={initialMonth} onChange={(e) => nav({ month: e.target.value })} />
           </div>
-          <div style={{ alignSelf: 'end' }}>
-            <button className="btn secondary" onClick={() => duplicateMonth(nextMonth)} disabled={busy === 'dup'}>
-              {busy === 'dup' ? 'Copying…' : `Duplicate to ${nextMonth}`}
-            </button>
-          </div>
+          {!readOnly && (
+            <div style={{ alignSelf: 'end' }}>
+              <button className="btn secondary" onClick={() => duplicateMonth(nextMonth)} disabled={busy === 'dup'}>
+                {busy === 'dup' ? 'Copying…' : `Duplicate to ${nextMonth}`}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
+      {!readOnly && (
       <div className="card">
         <h3>Bulk add slots</h3>
         <div className="row">
@@ -252,8 +261,9 @@ export default function ScheduleClient({
         </div>
         {err && <div className="alert error">{err}</div>}
       </div>
+      )}
 
-      <h2>Slots in {initialMonth} <span className="muted">({slots.length})</span></h2>
+      <h2>Slots in {initialMonth} <span className="muted">({slots.length})</span>{readOnly && <span className="badge gray" style={{ marginLeft: 10 }}>read-only</span>}</h2>
       {grouped.length === 0
         ? <div className="card"><p className="muted">No slots yet.</p></div>
         : grouped.map(([day, ds]) => (
@@ -261,31 +271,40 @@ export default function ScheduleClient({
             <b>{day}</b>
             <table style={{ marginTop: 10, marginBottom: 0 }}>
               <thead>
-                <tr><th>Time</th><th>Type</th><th>Format</th><th>Name</th><th>Status</th><th>Assigned to</th><th></th></tr>
+                <tr><th>Time</th><th>Channel</th><th>Type</th><th>Format</th><th>Name</th><th>Status</th><th>Assigned to</th><th></th></tr>
               </thead>
               <tbody>
                 {ds.map((s) => (
                   <tr key={s.id}>
                     <td>{fmt(s.scheduledAt)}</td>
+                    <td><span className="badge gray">{channelById.get(s.channelId)?.slug ?? '—'}</span></td>
                     <td>{s.type}</td>
                     <td>
                       {s.type === 'long' ? (
-                        <select value={s.format ?? ''} disabled={!!s.assignedItemId || !!busy}
-                                onChange={(e) => patchSlot(s, { format: (e.target.value || null) as 'question' | 'animation' | null })}>
-                          <option value="">—</option>
-                          <option value="question">question</option>
-                          <option value="animation">animation</option>
-                        </select>
+                        readOnly
+                          ? (s.format ?? '—')
+                          : (
+                            <select value={s.format ?? ''} disabled={!!s.assignedItemId || !!busy}
+                                    onChange={(e) => patchSlot(s, { format: (e.target.value || null) as 'question' | 'animation' | null })}>
+                              <option value="">—</option>
+                              <option value="question">question</option>
+                              <option value="animation">animation</option>
+                            </select>
+                          )
                       ) : '—'}
                     </td>
                     <td>
-                      <input type="text" defaultValue={s.name ?? ''} disabled={!!busy}
-                             onBlur={(e) => e.target.value !== (s.name ?? '') && patchSlot(s, { name: e.target.value || null })} />
+                      {readOnly
+                        ? (s.name ?? '—')
+                        : (
+                          <input type="text" defaultValue={s.name ?? ''} disabled={!!busy}
+                                 onBlur={(e) => e.target.value !== (s.name ?? '') && patchSlot(s, { name: e.target.value || null })} />
+                        )}
                     </td>
                     <td><span className={`badge ${badgeForStatus(s.status)}`}>{s.status}</span></td>
                     <td>{s.assignedItem ? <code>{s.assignedItem.expectedFilename}</code> : '—'}</td>
                     <td>
-                      {!s.assignedItemId && (
+                      {!readOnly && !s.assignedItemId && (
                         <button className="btn small danger" onClick={() => delSlot(s.id)} disabled={!!busy}>Delete</button>
                       )}
                     </td>

@@ -23,6 +23,10 @@ model Channel {
   youtubeChannelId    String?
   refreshTokenEnc     String?
   scopes              String?
+  // Timestamp of the latest successful YouTube OAuth connect. Used to surface
+  // an "active / reconnect soon / expired" badge — Google issues 7-day
+  // refresh tokens to unverified apps in Testing mode.
+  youtubeConnectedAt  DateTime?
 
   // Content flags — what this channel publishes.
   hasQuestionVideos   Boolean  @default(false)
@@ -263,6 +267,7 @@ model EditorTaskDoc {
 // ───────── Auth ─────────
 enum UserRole {
   admin
+  manager
   editor
 }
 

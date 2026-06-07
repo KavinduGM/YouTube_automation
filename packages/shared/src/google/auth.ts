@@ -51,7 +51,11 @@ export function buildAuthUrl(opts: {
   ).toString('base64url');
   return client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent', // force refresh_token return
+    // 'select_account' = always show the Google account chooser (so you can
+    // switch accounts on Reconnect instead of Google silently reusing the
+    // currently-logged-in browser session).
+    // 'consent' = force the consent screen so Google issues a refresh_token.
+    prompt: 'select_account consent',
     scope: scopes,
     state,
     login_hint: opts.loginEmail,
@@ -137,6 +141,7 @@ export async function saveYouTubeConnection(channelId: string, opts: {
       refreshTokenEnc: encryptString(opts.refreshToken),
       scopes: opts.scopes.join(' '),
       youtubeChannelId: ytChan.id,
+      youtubeConnectedAt: new Date(),
     },
   });
 }

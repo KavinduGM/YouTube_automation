@@ -30,7 +30,8 @@ export default async function SchedulePage({
 }) {
   const me = await getMe();
   if (!me?.user) redirect('/login');
-  if (me.user.role !== 'admin') redirect('/');
+  if (me.user.role !== 'admin' && me.user.role !== 'manager') redirect('/');
+  const readOnly = me.user.role !== 'admin';
   const { channels } = await apiGet<{ channels: Channel[] }>('/channels');
   const month = searchParams.month ?? thisMonth();
   const channelId = searchParams.channelId ?? channels[0]?.id;
@@ -44,7 +45,7 @@ export default async function SchedulePage({
       <AutoRefresh intervalSeconds={30} />
       <h1>Schedule</h1>
       <p className="muted">Pre-fill publishing slots. As raw videos arrive, the next matching-format slot in the right month is consumed.</p>
-      <ScheduleClient channels={channels} initialSlots={slots} channelId={channelId} month={month} />
+      <ScheduleClient channels={channels} initialSlots={slots} channelId={channelId} month={month} readOnly={readOnly} />
     </>
   );
 }
