@@ -15,12 +15,15 @@ export async function moveToPublishedFolder(itemId: string): Promise<void> {
   if (!target) return;
 
   const moved: string[] = [];
+  const failures: { kind: string; fileId: string; error: string }[] = [];
   if (item.driveFileId) {
     try {
       const r = await moveFile(item.driveFileId, target);
       if (r.moved) moved.push(`video:${item.driveFileId}`);
     } catch (err) {
+      const msg = (err as Error).message ?? String(err);
       logger.warn({ err, fileId: item.driveFileId, itemId }, 'move video failed');
+      failures.push({ kind: 'video', fileId: item.driveFileId, error: msg });
     }
   }
   if (item.driveThumbId) {
@@ -28,7 +31,9 @@ export async function moveToPublishedFolder(itemId: string): Promise<void> {
       const r = await moveFile(item.driveThumbId, target);
       if (r.moved) moved.push(`thumb:${item.driveThumbId}`);
     } catch (err) {
+      const msg = (err as Error).message ?? String(err);
       logger.warn({ err, fileId: item.driveThumbId, itemId }, 'move thumbnail failed');
+      failures.push({ kind: 'thumb', fileId: item.driveThumbId, error: msg });
     }
   }
   if (moved.length > 0) {
@@ -38,6 +43,20 @@ export async function moveToPublishedFolder(itemId: string): Promise<void> {
         type: 'moved',
         message: `Moved to published folder: ${moved.join(', ')}`,
         meta: { folderId: target },
+      },
+    });
+  }
+  if (failures.length > 0) {
+    // Surface in the dashboard's Activity tab. Common cause: the
+    // Drive+Sheets OAuth account lacks Editor permission on the
+    // working folder or the published folder.
+    const summary = failures.map((f) => `${f.kind}: ${f.error}`).join(' · ');
+    await prisma.contentEvent.create({
+      data: {
+        contentItemId: itemId,
+        type: 'move_failed',
+        message: `Could not move to published folder — ${summary}`,
+        meta: { folderId: target, failures },
       },
     });
   }

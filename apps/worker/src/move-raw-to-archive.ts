@@ -26,18 +26,23 @@ export async function moveRawToArchive(contentItemId: string): Promise<void> {
   if (!task) return;
 
   const moved: string[] = [];
+  const failures: { kind: string; fileId: string; error: string }[] = [];
   try {
     const r = await moveFile(task.rawDriveFileId, target);
     if (r.moved) moved.push(`raw:${task.rawDriveFileId}`);
   } catch (err) {
+    const msg = (err as Error).message ?? String(err);
     logger.warn({ err, fileId: task.rawDriveFileId, itemId: contentItemId }, 'move raw video failed');
+    failures.push({ kind: 'raw', fileId: task.rawDriveFileId, error: msg });
   }
   for (const d of task.docs) {
     try {
       const r = await moveFile(d.driveFileId, target);
       if (r.moved) moved.push(`doc:${d.driveFileId}`);
     } catch (err) {
+      const msg = (err as Error).message ?? String(err);
       logger.warn({ err, fileId: d.driveFileId, itemId: contentItemId }, 'move doc failed');
+      failures.push({ kind: 'doc', fileId: d.driveFileId, error: msg });
     }
   }
   if (moved.length > 0) {
@@ -47,6 +52,17 @@ export async function moveRawToArchive(contentItemId: string): Promise<void> {
         type: 'raw_archived',
         message: `Moved raw + docs to archive folder: ${moved.join(', ')}`,
         meta: { folderId: target },
+      },
+    });
+  }
+  if (failures.length > 0) {
+    const summary = failures.map((f) => `${f.kind}: ${f.error}`).join(' · ');
+    await prisma.contentEvent.create({
+      data: {
+        contentItemId,
+        type: 'raw_archive_failed',
+        message: `Could not move raw to archive — ${summary}`,
+        meta: { folderId: target, failures },
       },
     });
   }

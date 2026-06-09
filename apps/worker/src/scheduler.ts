@@ -217,14 +217,35 @@ async function processItem(itemId: string): Promise<void> {
     }
 
     // Move both files to the channel's "published" folder if configured.
-    // Best-effort — failure here doesn't undo the YouTube upload.
-    await moveToPublishedFolder(item.id).catch((err) =>
-      logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)'),
-    );
+    // Best-effort — failure here doesn't undo the YouTube upload. Per-file
+    // failures are recorded inside moveToPublishedFolder as ContentEvents
+    // (type='move_failed'); this outer catch only fires on totally
+    // unexpected throws (DB unreachable etc.) and we still surface those.
+    await moveToPublishedFolder(item.id).catch(async (err) => {
+      const msg = (err as Error).message ?? String(err);
+      logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)');
+      await prisma.contentEvent.create({
+        data: {
+          contentItemId: item.id,
+          type: 'move_failed',
+          message: `move-to-published threw: ${msg}`,
+          meta: { error: msg },
+        },
+      }).catch(() => {});
+    });
     // Also archive the raw video + any docs so the working folder stays clean.
-    await moveRawToArchive(item.id).catch((err) =>
-      logger.warn({ err, itemId: item.id }, 'move-raw-to-archive failed (non-fatal)'),
-    );
+    await moveRawToArchive(item.id).catch(async (err) => {
+      const msg = (err as Error).message ?? String(err);
+      logger.warn({ err, itemId: item.id }, 'move-raw-to-archive failed (non-fatal)');
+      await prisma.contentEvent.create({
+        data: {
+          contentItemId: item.id,
+          type: 'raw_archive_failed',
+          message: `move-raw-to-archive threw: ${msg}`,
+          meta: { error: msg },
+        },
+      }).catch(() => {});
+    });
 
     // Sheet write-back (best effort)
     if (item.sheetId) {
