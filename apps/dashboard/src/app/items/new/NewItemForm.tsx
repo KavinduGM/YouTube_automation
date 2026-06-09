@@ -50,8 +50,21 @@ export default function NewItemForm({ channels }: { channels: Channel[] }) {
     return `${channelSlug}_${datePart}_${type}_${slot}${tag}.${ext}`;
   }, [channelSlug, datePart, type, slot, examTag, ext]);
 
+  // YouTube counts tags as comma-joined string with quotes around any tag
+  // containing a space — over 500 chars → "invalid video keywords" error.
+  const tagsLen = useMemo(() => {
+    const list = tags.split(',').map((t) => t.trim()).filter(Boolean);
+    if (list.length === 0) return 0;
+    const sum = list.reduce((acc, t) => acc + t.length + (t.includes(' ') ? 2 : 0), 0);
+    return sum + (list.length - 1);
+  }, [tags]);
+  const tagsOver = tagsLen > 500;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (title.length > 100) { setErr(`Title is ${title.length}/100 — trim ${title.length - 100}.`); return; }
+    if (description.length > 5000) { setErr(`Description is ${description.length}/5000 — trim ${description.length - 5000}.`); return; }
+    if (tagsOver) { setErr(`Tags use ${tagsLen}/500 characters. Remove ${tagsLen - 500} chars — drop a tag or two.`); return; }
     setBusy(true); setErr(null);
     try {
       const body = {
@@ -130,13 +143,28 @@ export default function NewItemForm({ channels }: { channels: Channel[] }) {
       <p><strong>Expected filename:</strong> <code>{expectedFilename || '—'}</code></p>
 
       <h3 style={{ marginTop: 16 }}>Metadata</h3>
-      <label>Title</label>
+      <label>
+        Title <span className={title.length > 100 ? '' : 'muted'} style={{ color: title.length > 100 ? 'var(--danger)' : undefined }}>
+          ({title.length}/100)
+        </span>
+      </label>
       <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required />
-      <label>Description (paste full long-form copy)</label>
+      <label>
+        Description (paste full long-form copy){' '}
+        <span className={description.length > 5000 ? '' : 'muted'} style={{ color: description.length > 5000 ? 'var(--danger)' : undefined }}>
+          ({description.length}/5000){description.length > 5000 ? ` — trim ${description.length - 5000}` : ''}
+        </span>
+      </label>
       <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                style={{ minHeight: 240 }} required />
-      <label>Tags (comma-separated)</label>
-      <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} />
+                style={{ minHeight: 240, borderColor: description.length > 5000 ? 'var(--danger)' : undefined }} required />
+      <label>
+        Tags (comma-separated){' '}
+        <span className={tagsOver ? '' : 'muted'} style={{ color: tagsOver ? 'var(--danger)' : undefined }}>
+          ({tagsLen}/500){tagsOver ? ` — drop ${tagsLen - 500} chars` : ''}
+        </span>
+      </label>
+      <input type="text" value={tags} onChange={(e) => setTags(e.target.value)}
+             style={{ borderColor: tagsOver ? 'var(--danger)' : undefined }} />
 
       <h3 style={{ marginTop: 16 }}>Schedule</h3>
       <label>Publish at (America/New_York)</label>

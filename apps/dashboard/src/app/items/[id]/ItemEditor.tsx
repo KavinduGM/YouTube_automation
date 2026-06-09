@@ -65,17 +65,62 @@ export default function ItemEditor({ item }: { item: Item }) {
 
   const editable = !['scheduled', 'scheduling', 'published'].includes(item.status);
 
+  // YouTube Data API hard limits — don't raise these without checking docs.
+  const TITLE_MAX = 100;
+  const DESC_MAX = 5000;
+  const TAGS_MAX = 500;
+  const titleOver = title.length > TITLE_MAX;
+  const descOver = description.length > DESC_MAX;
+
+  // YouTube counts tags as: comma-joined string, with quotes added around
+  // any tag containing a space. So `["foo bar", "baz"]` is measured as
+  // `"foo bar",baz` (length 13), not `foo bar,baz` (length 11). Over 500
+  // characters and the API rejects with "invalid video keywords".
+  function ytEffectiveTagsLength(raw: string): number {
+    const tags = raw.split(',').map((t) => t.trim()).filter(Boolean);
+    if (tags.length === 0) return 0;
+    const sum = tags.reduce((acc, t) => acc + t.length + (t.includes(' ') ? 2 : 0), 0);
+    return sum + (tags.length - 1); // commas
+  }
+  const tagsLen = ytEffectiveTagsLength(tags);
+  const tagsOver = tagsLen > TAGS_MAX;
+
+  // Turn raw Fastify / Zod validation JSON into a human-readable sentence.
+  function prettyError(raw: string): string {
+    try {
+      const top = JSON.parse(raw);
+      const msg = typeof top.message === 'string' ? top.message : raw;
+      try {
+        const zod = JSON.parse(msg);
+        if (Array.isArray(zod)) {
+          return zod.map((z: { code?: string; path?: (string | number)[]; maximum?: number; minimum?: number; message?: string }) => {
+            const field = (z.path ?? []).join('.') || 'field';
+            if (z.code === 'too_big')   return `${field} too long (max ${z.maximum} characters)`;
+            if (z.code === 'too_small') return `${field} too short (min ${z.minimum} characters)`;
+            return `${field}: ${z.message ?? 'invalid'}`;
+          }).join(' · ');
+        }
+      } catch { /* msg wasn't nested JSON — fall through */ }
+      return msg;
+    } catch {
+      return raw;
+    }
+  }
+
   async function call(method: string, path: string, body?: unknown): Promise<Response> {
     const res = await fetch(`/api/proxy${path}`, {
       method, credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw new Error(prettyError(await res.text()));
     return res;
   }
 
   async function save() {
+    if (titleOver) { setErr(`Title is ${title.length}/${TITLE_MAX} characters. Trim ${title.length - TITLE_MAX} to save.`); return; }
+    if (descOver)  { setErr(`Description is ${description.length}/${DESC_MAX} characters. Trim ${description.length - DESC_MAX} to save. (YouTube's hard limit is ${DESC_MAX}.)`); return; }
+    if (tagsOver)  { setErr(`Tags use ${tagsLen}/${TAGS_MAX} characters (YouTube counts quotes around multi-word tags). Remove ${tagsLen - TAGS_MAX} chars worth — drop a tag or two.`); return; }
     setBusy('save'); setErr(null);
     try {
       await call('PATCH', `/items/${item.id}`, {
@@ -149,16 +194,30 @@ export default function ItemEditor({ item }: { item: Item }) {
   return (
     <div className="card">
       <h3>Metadata</h3>
-      <label>Title <span className="muted">(max 100)</span></label>
-      <input type="text" value={title} maxLength={100} disabled={!editable}
+      <label>
+        Title <span className={titleOver ? '' : 'muted'} style={{ color: titleOver ? 'var(--danger)' : undefined }}>
+          ({title.length}/{TITLE_MAX})
+        </span>
+      </label>
+      <input type="text" value={title} maxLength={TITLE_MAX} disabled={!editable}
              onChange={(e) => setTitle(e.target.value)} />
-      <label>Description</label>
+      <label>
+        Description <span className={descOver ? '' : 'muted'} style={{ color: descOver ? 'var(--danger)' : undefined }}>
+          ({description.length}/{DESC_MAX}){descOver ? ` — trim ${description.length - DESC_MAX}` : ''}
+        </span>
+      </label>
       <textarea value={description} disabled={!editable}
                 onChange={(e) => setDescription(e.target.value)}
-                style={{ minHeight: 240 }} />
-      <label>Tags <span className="muted">(comma-separated)</span></label>
+                style={{ minHeight: 240, borderColor: descOver ? 'var(--danger)' : undefined }} />
+      <label>
+        Tags <span className="muted">(comma-separated)</span>{' '}
+        <span className={tagsOver ? '' : 'muted'} style={{ color: tagsOver ? 'var(--danger)' : undefined }}>
+          ({tagsLen}/{TAGS_MAX}){tagsOver ? ` — drop ${tagsLen - TAGS_MAX} chars` : ''}
+        </span>
+      </label>
       <input type="text" value={tags} disabled={!editable}
-             onChange={(e) => setTags(e.target.value)} />
+             onChange={(e) => setTags(e.target.value)}
+             style={{ borderColor: tagsOver ? 'var(--danger)' : undefined }} />
       <label>Scheduled publish (America/New_York)</label>
       <input type="datetime-local" value={scheduled} disabled={!editable}
              onChange={(e) => setScheduled(e.target.value)} />
