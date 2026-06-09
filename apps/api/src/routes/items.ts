@@ -58,7 +58,9 @@ export const itemRoutes: FastifyPluginAsync = async (app) => {
       status: z.string().optional(),
       channelId: z.string().optional(),
       type: z.enum(['long', 'short', 'post']).optional(),
-      take: z.coerce.number().int().min(1).max(200).default(50),
+      // YYYY-MM — filter to items whose scheduledPublishAt falls in this month (UTC).
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+      take: z.coerce.number().int().min(1).max(500).default(50),
       skip: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
@@ -66,6 +68,12 @@ export const itemRoutes: FastifyPluginAsync = async (app) => {
     if (q.status) where.status = q.status as import('@prisma/client').ContentStatus;
     if (q.channelId) where.channelId = q.channelId;
     if (q.type) where.type = q.type;
+    if (q.month) {
+      const [y, m] = q.month.split('-').map(Number);
+      const start = new Date(Date.UTC(y, (m ?? 1) - 1, 1));
+      const end = new Date(Date.UTC(y, (m ?? 1), 1));
+      where.scheduledPublishAt = { gte: start, lt: end };
+    }
 
     const [items, total] = await Promise.all([
       prisma.contentItem.findMany({

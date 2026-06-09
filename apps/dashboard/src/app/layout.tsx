@@ -54,6 +54,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <>
                 <div className="nav-section">Overview</div>
                 <Link className="nav-link" href="/dashboard">Dashboard</Link>
+                <Link className="nav-link" href="/planner">Content Planner</Link>
                 <div className="nav-section">Review</div>
                 <Link className="nav-link" href="/inbox">Inbox</Link>
                 <Link className="nav-link" href="/items">Items</Link>
@@ -70,6 +71,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <>
                 <div className="nav-section">Overview</div>
                 <Link className="nav-link" href="/dashboard">Dashboard</Link>
+                <Link className="nav-link" href="/planner">Content Planner</Link>
                 <div className="nav-section">Review</div>
                 <Link className="nav-link" href="/inbox">Inbox</Link>
                 <Link className="nav-link" href="/items">Items</Link>

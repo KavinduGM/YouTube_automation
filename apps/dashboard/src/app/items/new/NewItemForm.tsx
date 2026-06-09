@@ -34,8 +34,6 @@ export default function NewItemForm({ channels }: { channels: Channel[] }) {
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
   const [scheduledLocal, setScheduledLocal] = useState('');
-  const [sheetId, setSheetId] = useState('');
-  const [sheetTab, setSheetTab] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -74,8 +72,6 @@ export default function NewItemForm({ channels }: { channels: Channel[] }) {
         title, description,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         scheduledPublishAt: nyInputToIso(scheduledLocal),
-        sheetId: sheetId || undefined,
-        sheetTab: sheetTab || undefined,
       };
       const res = await fetch('/api/proxy/items', {
         method: 'POST', credentials: 'include',
@@ -171,17 +167,7 @@ export default function NewItemForm({ channels }: { channels: Channel[] }) {
       <input type="datetime-local" value={scheduledLocal}
              onChange={(e) => setScheduledLocal(e.target.value)} required />
 
-      <h3 style={{ marginTop: 16 }}>Sheet write-back (optional)</h3>
-      <div className="row">
-        <div>
-          <label>Sheet ID</label>
-          <input type="text" value={sheetId} onChange={(e) => setSheetId(e.target.value)} />
-        </div>
-        <div>
-          <label>Tab name (defaults to first)</label>
-          <input type="text" value={sheetTab} onChange={(e) => setSheetTab(e.target.value)} />
-        </div>
-      </div>
+      {/* Sheet write-back removed: status now tracked in the in-app Content Planner. */}
 
       {err && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{err}</p>}
       <div style={{ marginTop: 16 }}>

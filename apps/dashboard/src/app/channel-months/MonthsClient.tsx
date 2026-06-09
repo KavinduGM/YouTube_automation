@@ -195,12 +195,7 @@ export default function MonthsClient({
                          onChange={(e) => setDraftField(row, 'rawArchiveFolderId', e.target.value)}
                          placeholder="optional" />
                 </div>
-                <div>
-                  <label>Default sheet ID</label>
-                  <input type="text" value={d.defaultSheetId}
-                         onChange={(e) => setDraftField(row, 'defaultSheetId', e.target.value)}
-                         placeholder="optional" />
-                </div>
+                <div>{/* sheet ID removed — status now tracked in the in-app Content Planner */}</div>
               </div>
               <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn primary" onClick={() => saveRow(row)} disabled={!dirty || rowBusy}>

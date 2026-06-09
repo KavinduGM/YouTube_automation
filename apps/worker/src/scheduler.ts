@@ -9,7 +9,6 @@ import {
 } from '@yt/shared';
 import { downloadFile, getFileMeta } from '@yt/shared/google/drive';
 import { uploadAndSchedule, addVideoToPlaylist } from '@yt/shared/google/youtube';
-import { writeStatusToSheet } from '@yt/shared/google/sheets';
 import { moveToPublishedFolder } from './move-to-published.js';
 
 const MAX_ATTEMPTS = 3;
@@ -240,23 +239,9 @@ async function processItem(itemId: string): Promise<void> {
       }).catch(() => {});
     });
 
-    // Sheet write-back (best effort)
-    if (item.sheetId) {
-      try {
-        await writeStatusToSheet({
-          spreadsheetId: item.sheetId,
-          tab: item.sheetTab ?? undefined,
-          matchByFilename: item.expectedFilename,
-          status: effectivePublishAt ? 'scheduled' : 'published',
-          youtubeUrl: url,
-          youtubeId: videoId,
-          scheduledAt: effectivePublishAt?.toISOString(),
-          approvedBy: item.approvedBy?.email ?? undefined,
-        });
-      } catch (err) {
-        logger.warn({ err, itemId: item.id }, 'sheet write-back failed (non-fatal)');
-      }
-    }
+    // Sheet write-back removed: status is now tracked in the dashboard
+    // Content Planner. The sheetId/sheetTab fields on ContentItem are
+    // left in the schema for backwards compatibility but unused.
   } catch (err) {
     const msg = (err as Error).message ?? String(err);
     const willRetry = (item.attempts ?? 0) + 0 < MAX_ATTEMPTS - 1;
