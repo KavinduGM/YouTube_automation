@@ -12,6 +12,7 @@ import {
 } from '@yt/shared';
 import { walkFolder, downloadFile } from '@yt/shared/google/drive';
 import { setThumbnail } from '@yt/shared/google/youtube';
+import { moveRawToArchive } from './move-raw-to-archive.js';
 
 // Walks each channel's Drive folder, finds files matching the naming convention,
 // pairs videos with thumbnails, and matches them to ContentItems.
@@ -122,6 +123,15 @@ async function processChannelFolder(channelId: string, folderId: string): Promis
           meta: { driveFileId: pair.video.id, driveThumbId: pair.thumb?.id ?? null },
         },
       });
+      // The editor has just delivered the final video — archive the raw
+      // source file (and any companion docs) now so the working folder
+      // stays clean before the approver gets the notification email.
+      // Idempotent + best-effort: per-file failures are logged as
+      // ContentEvents inside the function. No-op for items that never
+      // had an EditorTask (direct dashboard creation).
+      await moveRawToArchive(item.id).catch((err) =>
+        logger.warn({ err, itemId: item.id }, 'raw-to-archive failed at editor-final time (non-fatal)'),
+      );
       await notifyApprovers(updated.id).catch((err) =>
         logger.error({ err, itemId: updated.id }, 'failed to send pending approval email'),
       );

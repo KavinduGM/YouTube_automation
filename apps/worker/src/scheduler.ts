@@ -11,7 +11,6 @@ import { downloadFile, getFileMeta } from '@yt/shared/google/drive';
 import { uploadAndSchedule, addVideoToPlaylist } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
 import { moveToPublishedFolder } from './move-to-published.js';
-import { moveRawToArchive } from './move-raw-to-archive.js';
 
 const MAX_ATTEMPTS = 3;
 
@@ -216,11 +215,18 @@ async function processItem(itemId: string): Promise<void> {
       }
     }
 
-    // Move both files to the channel's "published" folder if configured.
-    // Best-effort — failure here doesn't undo the YouTube upload. Per-file
-    // failures are recorded inside moveToPublishedFolder as ContentEvents
-    // (type='move_failed'); this outer catch only fires on totally
-    // unexpected throws (DB unreachable etc.) and we still surface those.
+    // Move the final video + thumbnail to the channel's "published"
+    // folder. Best-effort — failure here doesn't undo the YouTube upload.
+    // Per-file failures are recorded inside moveToPublishedFolder as
+    // ContentEvents (type='move_failed'); this outer catch only fires on
+    // totally unexpected throws (DB unreachable etc.) and we still
+    // surface those.
+    //
+    // NOTE: raw-to-archive is NOT called here. The raw video gets
+    // archived earlier — in drive-watcher, the moment the editor's
+    // final upload is detected. By the time we reach this point the
+    // raw is already in the archive folder (or surfaced a failure
+    // event there).
     await moveToPublishedFolder(item.id).catch(async (err) => {
       const msg = (err as Error).message ?? String(err);
       logger.warn({ err, itemId: item.id }, 'move-to-published failed (non-fatal)');
@@ -229,19 +235,6 @@ async function processItem(itemId: string): Promise<void> {
           contentItemId: item.id,
           type: 'move_failed',
           message: `move-to-published threw: ${msg}`,
-          meta: { error: msg },
-        },
-      }).catch(() => {});
-    });
-    // Also archive the raw video + any docs so the working folder stays clean.
-    await moveRawToArchive(item.id).catch(async (err) => {
-      const msg = (err as Error).message ?? String(err);
-      logger.warn({ err, itemId: item.id }, 'move-raw-to-archive failed (non-fatal)');
-      await prisma.contentEvent.create({
-        data: {
-          contentItemId: item.id,
-          type: 'raw_archive_failed',
-          message: `move-raw-to-archive threw: ${msg}`,
           meta: { error: msg },
         },
       }).catch(() => {});
