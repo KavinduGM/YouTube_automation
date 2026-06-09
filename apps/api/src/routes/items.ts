@@ -22,6 +22,15 @@ const ItemCreate = z.object({
   sheetRow: z.number().int().optional(),
 });
 
+const PolishChecks = z.object({
+  aiUse: z.boolean().optional(),
+  captionCert: z.boolean().optional(),
+  shortsRemix: z.boolean().optional(),
+  eduLevel: z.boolean().optional(),
+  endScreen: z.boolean().optional(),
+  cards: z.boolean().optional(),
+}).strict();
+
 const ItemUpdate = z.object({
   title: z.string().min(1).max(100).optional(),
   description: z.string().max(5000).optional(),
@@ -35,6 +44,9 @@ const ItemUpdate = z.object({
   format: z.enum(['question', 'animation']).nullable().optional(),
   sheetId: z.string().nullable().optional(),
   sheetTab: z.string().nullable().optional(),
+  // YouTube automation extras
+  playlistIds: z.array(z.string()).optional(),
+  polishChecks: PolishChecks.optional(),
 });
 
 export const itemRoutes: FastifyPluginAsync = async (app) => {

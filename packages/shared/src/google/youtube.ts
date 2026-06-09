@@ -147,6 +147,89 @@ export async function setThumbnail(opts: {
   });
 }
 
+// ─────── Playlists ───────
+
+export interface YouTubePlaylist {
+  id: string;
+  title: string;
+  itemCount: number;
+  privacyStatus: string;
+}
+
+// List all playlists owned by the authenticated channel.
+export async function listPlaylists(channelId: string): Promise<YouTubePlaylist[]> {
+  const auth = await clientForChannel(channelId);
+  const yt = google.youtube({ version: 'v3', auth });
+  const out: YouTubePlaylist[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res: { data: { items?: Array<{ id?: string | null; snippet?: { title?: string | null }; contentDetails?: { itemCount?: number | null }; status?: { privacyStatus?: string | null } }>; nextPageToken?: string | null } } =
+      await yt.playlists.list({
+        part: ['snippet', 'contentDetails', 'status'],
+        mine: true,
+        maxResults: 50,
+        pageToken,
+      });
+    for (const p of res.data.items ?? []) {
+      if (!p.id) continue;
+      out.push({
+        id: p.id,
+        title: p.snippet?.title ?? '(untitled)',
+        itemCount: p.contentDetails?.itemCount ?? 0,
+        privacyStatus: p.status?.privacyStatus ?? 'unknown',
+      });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return out;
+}
+
+// Create a new playlist on the authenticated channel.
+export async function createPlaylist(opts: {
+  channelId: string;
+  title: string;
+  description?: string;
+  privacyStatus?: 'public' | 'private' | 'unlisted';
+}): Promise<YouTubePlaylist> {
+  const auth = await clientForChannel(opts.channelId);
+  const yt = google.youtube({ version: 'v3', auth });
+  const res = await yt.playlists.insert({
+    part: ['snippet', 'status'],
+    requestBody: {
+      snippet: { title: opts.title, description: opts.description },
+      status: { privacyStatus: opts.privacyStatus ?? 'public' },
+    },
+  });
+  const p = res.data;
+  if (!p.id) throw new Error('YouTube did not return a playlist id');
+  return {
+    id: p.id,
+    title: p.snippet?.title ?? opts.title,
+    itemCount: 0,
+    privacyStatus: p.status?.privacyStatus ?? (opts.privacyStatus ?? 'public'),
+  };
+}
+
+// Append a video to a playlist. Idempotent: if the video is already in
+// the playlist, YouTube returns success (with the same playlistItemId).
+export async function addVideoToPlaylist(opts: {
+  channelId: string;
+  playlistId: string;
+  videoId: string;
+}): Promise<void> {
+  const auth = await clientForChannel(opts.channelId);
+  const yt = google.youtube({ version: 'v3', auth });
+  await yt.playlistItems.insert({
+    part: ['snippet'],
+    requestBody: {
+      snippet: {
+        playlistId: opts.playlistId,
+        resourceId: { kind: 'youtube#video', videoId: opts.videoId },
+      },
+    },
+  });
+}
+
 // Delete a video from YouTube. Works for scheduled (private) and live videos.
 // Returns true if deleted, false if YouTube reports it doesn't exist (already gone).
 export async function deleteVideo(channelId: string, videoId: string): Promise<boolean> {

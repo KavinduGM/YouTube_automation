@@ -1,6 +1,15 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+
+interface PolishChecks {
+  aiUse?: boolean;
+  captionCert?: boolean;
+  shortsRemix?: boolean;
+  eduLevel?: boolean;
+  endScreen?: boolean;
+  cards?: boolean;
+}
 
 interface Item {
   id: string;
@@ -12,8 +21,30 @@ interface Item {
   driveFileId: string | null;
   expectedFilename: string;
   youtubeVideoId: string | null;
+  recordingCountry: string;
+  playlistIds: string[];
+  polishChecks: PolishChecks | null;
+  channel: { id: string };
   editorTask?: { id: string; status: string } | null;
 }
+
+interface YouTubePlaylist {
+  id: string;
+  title: string;
+  itemCount: number;
+  privacyStatus: string;
+}
+
+// Each entry is one row in the post-upload "Polish" checklist. Order matters —
+// it's what the approver sees in the UI. Keys must match the PolishChecks type.
+const POLISH_ROWS: Array<{ key: keyof PolishChecks; label: string; hint: string }> = [
+  { key: 'aiUse',       label: 'AI use → "No"',                       hint: 'Required if any AI-generated likeness/footage; safe to skip otherwise.' },
+  { key: 'captionCert', label: 'Caption certification → "Never aired on US TV"', hint: 'Only required for content originally aired on US television.' },
+  { key: 'shortsRemix', label: 'Shorts remixing → "Don\'t allow remixing"', hint: 'Defaults to Allow; switch to Don\'t allow in Studio.' },
+  { key: 'eduLevel',    label: 'Educational level → "Graduate school"', hint: 'Part of YouTube\'s Courses feature; in Studio under "Show more".' },
+  { key: 'endScreen',   label: 'End screen added',                    hint: 'Add subscribe + last video. Final 20s of the video.' },
+  { key: 'cards',       label: 'Cards added',                         hint: 'Add 1–2 cards at relevant timestamps.' },
+];
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -59,9 +90,35 @@ export default function ItemEditor({ item }: { item: Item }) {
   const [description, setDescription] = useState(item.description);
   const [tags, setTags] = useState(item.tags.join(', '));
   const [scheduled, setScheduled] = useState(isoToNyInput(item.scheduledPublishAt));
+  const [videoLocation, setVideoLocation] = useState(item.recordingCountry || 'United States');
+  const [selectedPlaylists, setSelectedPlaylists] = useState<string[]>(item.playlistIds ?? []);
+  const [polish, setPolish] = useState<PolishChecks>(item.polishChecks ?? {});
+  const [availablePlaylists, setAvailablePlaylists] = useState<YouTubePlaylist[] | null>(null);
+  const [playlistsErr, setPlaylistsErr] = useState<string | null>(null);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+
+  // Load this channel's YouTube playlists once on mount. Best-effort —
+  // a YouTube auth issue shouldn't block editing the rest of the item.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/proxy/playlists?channelId=${item.channel.id}`, { credentials: 'include' });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (!cancelled) setAvailablePlaylists(data.playlists ?? []);
+      } catch (e) {
+        if (!cancelled) setPlaylistsErr((e as Error).message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [item.channel.id]);
 
   const editable = !['scheduled', 'scheduling', 'published'].includes(item.status);
 
@@ -127,10 +184,47 @@ export default function ItemEditor({ item }: { item: Item }) {
         title, description,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         scheduledPublishAt: nyInputToIso(scheduled),
+        recordingCountry: videoLocation,
+        playlistIds: selectedPlaylists,
+        polishChecks: polish,
       });
       router.refresh();
     } catch (e: unknown) { setErr((e as Error).message); }
     finally { setBusy(null); }
+  }
+
+  // Save just the polish checklist — doesn't touch metadata or trigger the
+  // save-button limits. Useful for the post-upload "tick as you go" flow.
+  async function savePolish(next: PolishChecks) {
+    setPolish(next);
+    try {
+      await call('PATCH', `/items/${item.id}`, { polishChecks: next });
+    } catch (e: unknown) { setErr((e as Error).message); }
+  }
+
+  async function createPlaylist() {
+    if (!newPlaylistTitle.trim()) return;
+    setBusy('newPlaylist'); setErr(null);
+    try {
+      const res = await fetch(`/api/proxy/playlists?channelId=${item.channel.id}`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: newPlaylistTitle.trim(), privacyStatus: 'public' }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setAvailablePlaylists((cur) => [...(cur ?? []), data.playlist]);
+      setSelectedPlaylists((cur) => [...cur, data.playlist.id]);
+      setNewPlaylistTitle('');
+    } catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(null); }
+  }
+
+  function togglePlaylist(id: string) {
+    setSelectedPlaylists((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
   }
 
   async function approve() {
@@ -221,6 +315,85 @@ export default function ItemEditor({ item }: { item: Item }) {
       <label>Scheduled publish (America/New_York)</label>
       <input type="datetime-local" value={scheduled} disabled={!editable}
              onChange={(e) => setScheduled(e.target.value)} />
+
+      <label style={{ marginTop: 14 }}>
+        Video location <span className="muted">(free text — shown as recording location on YouTube)</span>
+      </label>
+      <input type="text" value={videoLocation} disabled={!editable}
+             onChange={(e) => setVideoLocation(e.target.value)}
+             placeholder="United States" />
+
+      <h3 style={{ marginTop: 24 }}>Playlists</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Video will be added to each selected playlist immediately after upload. Multi-select.
+      </p>
+      {playlistsErr && (
+        <div className="alert error">
+          Couldn't load playlists: {playlistsErr}
+          <br /><span className="muted">Make sure YouTube is connected on this channel.</span>
+        </div>
+      )}
+      {!playlistsErr && availablePlaylists === null && <p className="muted">Loading playlists…</p>}
+      {availablePlaylists && availablePlaylists.length === 0 && (
+        <p className="muted">No playlists yet on this channel. Create one below.</p>
+      )}
+      {availablePlaylists && availablePlaylists.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {availablePlaylists.map((p) => (
+            <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <input type="checkbox" disabled={!editable}
+                     checked={selectedPlaylists.includes(p.id)}
+                     onChange={() => togglePlaylist(p.id)} />
+              <span>{p.title}</span>
+              <span className="muted" style={{ fontSize: 12 }}>· {p.itemCount} videos · {p.privacyStatus}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {editable && availablePlaylists !== null && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <label>New playlist title</label>
+            <input type="text" value={newPlaylistTitle}
+                   onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                   placeholder="e.g. ATI Pharmacology" />
+          </div>
+          <button className="btn secondary" onClick={createPlaylist}
+                  disabled={!newPlaylistTitle.trim() || busy === 'newPlaylist'}>
+            {busy === 'newPlaylist' ? 'Creating…' : '+ Create playlist'}
+          </button>
+        </div>
+      )}
+
+      {item.youtubeVideoId && (
+        <>
+          <h3 style={{ marginTop: 24 }}>
+            Polish checklist{' '}
+            <span className="muted" style={{ fontSize: 14, fontWeight: 'normal' }}>
+              ({POLISH_ROWS.filter((r) => polish[r.key]).length}/{POLISH_ROWS.length} done)
+            </span>
+          </h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            These YouTube settings aren't exposed by the Data API and must be set in Studio.
+            Tick them off as you go.{' '}
+            <a href={`https://studio.youtube.com/video/${item.youtubeVideoId}/edit`} target="_blank" rel="noreferrer">
+              → Open this video in Studio
+            </a>
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {POLISH_ROWS.map((r) => (
+              <label key={r.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: 0 }}>
+                <input type="checkbox" checked={!!polish[r.key]}
+                       onChange={(e) => savePolish({ ...polish, [r.key]: e.target.checked })} />
+                <div>
+                  <div>{r.label}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{r.hint}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
 
       {err && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{err}</p>}
 

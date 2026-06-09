@@ -15,6 +15,7 @@ import { bootstrapAdmin } from './bootstrap.js';
 import { channelMonthRoutes } from './routes/channelMonths.js';
 import { statsRoutes } from './routes/stats.js';
 import { automationRoutes } from './routes/automation.js';
+import { playlistRoutes } from './routes/playlists.js';
 
 async function build() {
   const e = env();
@@ -59,6 +60,7 @@ async function build() {
   await app.register(taskRoutes, { prefix: '/tasks' });
   await app.register(channelMonthRoutes, { prefix: '/channel-months' });
   await app.register(statsRoutes, { prefix: '/stats' });
+  await app.register(playlistRoutes, { prefix: '/playlists' });
   // Service-to-service routes for the Content Automation project. Uses
   // bearer-token auth (AUTOMATION_BEARER), independent of cookie sessions.
   await app.register(automationRoutes, { prefix: '/automation' });

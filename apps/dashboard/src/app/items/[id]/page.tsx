@@ -3,6 +3,15 @@ import { apiGet, getMe } from '@/lib/api';
 import { fmtDateTime, statusBadge } from '@/lib/format';
 import ItemEditor from './ItemEditor';
 
+export interface PolishChecks {
+  aiUse?: boolean;
+  captionCert?: boolean;
+  shortsRemix?: boolean;
+  eduLevel?: boolean;
+  endScreen?: boolean;
+  cards?: boolean;
+}
+
 interface ItemDetail {
   id: string;
   title: string;
@@ -14,6 +23,7 @@ interface ItemDetail {
   examTag: string | null;
   categoryId: string;
   defaultLanguage: string;
+  recordingCountry: string;
   madeForKids: boolean;
   scheduledPublishAt: string;
   driveFileId: string | null;
@@ -25,6 +35,8 @@ interface ItemDetail {
   rejectedReason: string | null;
   lastError: string | null;
   attempts: number;
+  playlistIds: string[];
+  polishChecks: PolishChecks | null;
   channel: { id: string; name: string; slug: string };
   approvedBy: { email: string } | null;
   events: Array<{ id: string; type: string; message: string | null; actorEmail: string | null; createdAt: string }>;

@@ -8,7 +8,7 @@ import {
   failureEmail,
 } from '@yt/shared';
 import { downloadFile, getFileMeta } from '@yt/shared/google/drive';
-import { uploadAndSchedule } from '@yt/shared/google/youtube';
+import { uploadAndSchedule, addVideoToPlaylist } from '@yt/shared/google/youtube';
 import { writeStatusToSheet } from '@yt/shared/google/sheets';
 import { moveToPublishedFolder } from './move-to-published.js';
 import { moveRawToArchive } from './move-raw-to-archive.js';
@@ -188,6 +188,33 @@ async function processItem(itemId: string): Promise<void> {
         meta: { url, publishAt: effectivePublishAt?.toISOString() ?? null, thumbnailError: thumbnailError ?? null },
       },
     });
+
+    // Add the video to each requested playlist. Best-effort — a single
+    // failure doesn't roll back the upload; we log per-playlist outcome.
+    for (const playlistId of item.playlistIds ?? []) {
+      try {
+        await addVideoToPlaylist({ channelId: item.channelId, playlistId, videoId });
+        await prisma.contentEvent.create({
+          data: {
+            contentItemId: item.id,
+            type: 'playlist_added',
+            message: `Added to playlist ${playlistId}`,
+            meta: { playlistId, videoId },
+          },
+        });
+      } catch (err) {
+        const msg = (err as Error).message ?? String(err);
+        logger.warn({ err, itemId: item.id, playlistId }, 'failed to add to playlist (non-fatal)');
+        await prisma.contentEvent.create({
+          data: {
+            contentItemId: item.id,
+            type: 'playlist_add_failed',
+            message: `Could not add to playlist ${playlistId}: ${msg}`,
+            meta: { playlistId, videoId, error: msg },
+          },
+        });
+      }
+    }
 
     // Move both files to the channel's "published" folder if configured.
     // Best-effort — failure here doesn't undo the YouTube upload.

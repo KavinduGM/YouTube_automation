@@ -148,6 +148,17 @@ model ContentItem {
   lastError         String?
   attempts          Int           @default(0)
 
+  // YouTube playlists to add this video to AFTER successful upload.
+  // Empty = don't add to any. Order is preserved.
+  playlistIds       String[]      @default([])
+
+  // Manual "Studio-only" checklist — tracks which post-upload fields the
+  // approver has set in YouTube Studio. Stored as JSON like
+  //   { "aiUse": true, "captionCert": false, "shortsRemix": true,
+  //     "eduLevel": false, "endScreen": false, "cards": false }
+  // null = nothing checked yet.
+  polishChecks      Json?
+
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
